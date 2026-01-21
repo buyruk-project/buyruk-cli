@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main, master ]
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      upload_artifacts:
+        description: 'Upload build artifacts'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  # Fast static analysis job that runs once (not per OS)
+  lint:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Check formatting
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Code is not formatted. Run: gofmt -s -w ."
+            gofmt -s -d .
+            exit 1
+          fi
+
+      - name: Verify dependencies
+        run: go mod verify
+
+  test:
+    name: Test on ${{ matrix.os }}
+    needs: lint
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true # Speeds up subsequent runs
+
+      - name: Build
+        run: go build -o buyruk ./cmd/buyruk
+        timeout-minutes: 5
+
+      - name: Run Tests
+        # Use -race to catch concurrency issues in your atomic locking logic
+        # -count=1 disables test caching, -p=4 runs tests in parallel
+        # Note: -race is supported on windows/amd64, linux/amd64, and darwin/arm64
+        run: go test -v -race -count=1 -p=4 -timeout=10m ./...
+        timeout-minutes: 15
+
+      - name: Check if should upload artifacts
+        id: check-upload
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # Check if PR has 'build-artifacts' label (exact match, not substring)
+            LABELS='${{ toJSON(github.event.pull_request.labels.*.name) }}'
+            # Handle null, empty array, or parse JSON array for exact match
+            if [ -n "$LABELS" ] && [ "$LABELS" != "null" ] && [ "$LABELS" != "[]" ]; then
+              # Parse JSON array: remove brackets/quotes, split by comma, check each label
+              # Use grep with word boundaries for exact match (handles JSON array format)
+              if echo "$LABELS" | grep -oE '"[^"]+"' | grep -qx '"build-artifacts"'; then
+                echo "should_upload=true" >> $GITHUB_OUTPUT
+              else
+                echo "should_upload=false" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "should_upload=false" >> $GITHUB_OUTPUT
+            fi
+          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Manual trigger: check the input parameter
+            if [ "${{ github.event.inputs.upload_artifacts }}" == "true" ]; then
+              echo "should_upload=true" >> $GITHUB_OUTPUT
+            else
+              echo "should_upload=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "should_upload=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload build artifacts
+        # Upload artifacts if:
+        # 1. PR has 'build-artifacts' label, OR
+        # 2. Manual workflow_dispatch with upload_artifacts=true
+        if: steps.check-upload.outputs.should_upload == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: buyruk-${{ matrix.os }}
+          path: |
+            buyruk
+            buyruk.exe
+          if-no-files-found: ignore
