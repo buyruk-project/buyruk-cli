@@ -424,10 +424,11 @@ func TestValidate(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if err != nil && !tt.wantErr {
+			if err != nil && tt.wantErr {
 				// Verify error message has config: prefix
-				if err.Error()[:7] != "config:" {
-					t.Errorf("Validate() error should have 'config:' prefix, got: %q", err.Error())
+				msg := err.Error()
+				if len(msg) < len("config:") || msg[:len("config:")] != "config:" {
+					t.Errorf("Validate() error should have 'config:' prefix, got: %q", msg)
 				}
 			}
 		})
