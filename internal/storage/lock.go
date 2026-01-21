@@ -17,6 +17,10 @@ func AcquireLock(projectKey string) (func(), error) {
 		return nil, err
 	}
 
+	// Ensure the project directory exists before creating the lock file
+	if err := os.MkdirAll(projectDir, 0755); err != nil {
+		return nil, fmt.Errorf("storage: failed to create project directory for lock: %w", err)
+	}
 	lockPath := filepath.Join(projectDir, ".buyruk.lock")
 
 	// Try to create lock file atomically, waiting up to 5 seconds if it already exists
