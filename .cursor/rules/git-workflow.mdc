@@ -27,6 +27,10 @@ When I ask you to "ship this" or "prepare a PR," follow these exact steps using 
   - **Summary**: What changed?
   - **Atomic Changes**: A bulleted list of the commits made.
   - **Cross-Platform Check**: Mention that logic was verified for Win/Mac/Linux.
+- **PR Body File Pattern**: To avoid shell escaping issues with complex PR descriptions:
+  1. Create a temporary markdown file: `write pr_body.md` with the PR description
+  2. Use `gh pr create --draft --title "..." --body-file pr_body.md`
+  3. Delete the temporary file after PR creation: `delete_file pr_body.md`
 - **Build Artifacts**: Only trigger artifact uploads if explicitly requested in the prompt. Options:
   - Add `build-artifacts` label to PR (can be added anytime, even after PR creation - auto-triggers workflow)
   - Use GitHub Actions UI → "Run workflow" → check "Upload build artifacts" (manual trigger)
@@ -37,4 +41,6 @@ If I say "Create a PR for the new login feature," you should run:
 2. `git add internal/auth/... && git commit -m "feat(auth): implement oauth2 core"`
 3. `git add cmd/... && git commit -m "feat(cli): add login command"`
 4. `git push -u origin feat/login-system`
-5. `gh pr create --draft --title "Implement OAuth2 Login System" --body "..."`
+5. Create `pr_body.md` with the PR description
+6. `gh pr create --draft --title "Implement OAuth2 Login System" --body-file pr_body.md`
+7. Delete `pr_body.md` after PR creation
