@@ -69,6 +69,7 @@ Following the GitHub CLI (`gh`) architecture pattern:
   - Use early returns. Wrap errors with `fmt.Errorf("context: %w", err)`.
   - Use `cmd.OutOrStdout()` and `cmd.ErrOrStderr()` in Cobra commands (not `os.Stdout`/`os.Stderr`) for testability.
   - Write tests for all new commands and packages.
+  - **Create tests for each scenario**: Every function, edge case, error path, and code branch should have a corresponding test. Empty test functions that don't actually test anything should be removed or properly implemented.
   - **Run local checks before suggesting PRs**: `go vet ./...`, `gofmt -s -l .`, `go test -race ./...`, `go mod verify`
   - Ensure CI will be green by catching issues locally first.
 - **Ask First**: Before adding new external dependencies to `go.mod`.

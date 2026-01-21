@@ -9,37 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestLoad_NonExistent(t *testing.T) {
-	// Since we can't easily override storage.ConfigDir() without modifying it,
-	// we test the actual behavior by checking that Load returns defaults
-	// when config doesn't exist. This is tested in integration tests.
-	// For now, we verify Default() works correctly (tested in TestDefault).
-}
-
-func TestLoad_Existing(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, ConfigFileName)
-
-	// Create a test config
-	testCfg := &Config{
-		DefaultProject: "TEST",
-		DefaultFormat:  "json",
-	}
-
-	data, err := json.MarshalIndent(testCfg, "", "  ")
-	if err != nil {
-		t.Fatalf("Failed to marshal test config: %v", err)
-	}
-
-	if err := os.WriteFile(configPath, data, 0644); err != nil {
-		t.Fatalf("Failed to write test config: %v", err)
-	}
-
-	// Note: This test requires the ability to override storage.ConfigFilePath()
-	// For a full test, we'd need to modify storage or use dependency injection
-	// For now, we test the core logic separately
-}
-
 func TestDefault(t *testing.T) {
 	cfg := Default()
 	if cfg == nil {
@@ -106,23 +75,51 @@ func TestResolveFormat_Flag(t *testing.T) {
 }
 
 func TestResolveFormat_Config(t *testing.T) {
+	// First, set a config value
+	originalCfg, _ := Get()
+	defer func() {
+		// Restore original config
+		if originalCfg != nil {
+			Save(originalCfg)
+		}
+	}()
+
+	// Set config format to json
+	if err := Set("default_format", "json"); err != nil {
+		t.Fatalf("Failed to set config: %v", err)
+	}
+
 	cmd := &cobra.Command{}
 	cmd.Flags().String("format", "", "Output format")
 
-	// Don't set flag, should fall back to default
+	// Don't set flag, should use config value
 	format := ResolveFormat(cmd)
-	if format != DefaultFormatModern {
-		t.Errorf("ResolveFormat() = %q, want %q", format, DefaultFormatModern)
+	if format != "json" {
+		t.Errorf("ResolveFormat() = %q, want json (from config)", format)
 	}
 }
 
 func TestResolveFormat_Default(t *testing.T) {
+	// Clear any existing config format
+	originalCfg, _ := Get()
+	defer func() {
+		if originalCfg != nil {
+			Save(originalCfg)
+		}
+	}()
+
+	// Clear default_format
+	if err := Set("default_format", ""); err != nil {
+		t.Fatalf("Failed to clear config: %v", err)
+	}
+
 	cmd := &cobra.Command{}
 	cmd.Flags().String("format", "", "Output format")
 
+	// Don't set flag or config, should use default
 	format := ResolveFormat(cmd)
 	if format != DefaultFormatModern {
-		t.Errorf("ResolveFormat() = %q, want %q", format, DefaultFormatModern)
+		t.Errorf("ResolveFormat() = %q, want %q (default)", format, DefaultFormatModern)
 	}
 }
 
@@ -142,7 +139,48 @@ func TestResolveProject_Flag(t *testing.T) {
 	}
 }
 
+func TestResolveProject_Config(t *testing.T) {
+	// First, set a config value
+	originalCfg, _ := Get()
+	defer func() {
+		// Restore original config
+		if originalCfg != nil {
+			Save(originalCfg)
+		}
+	}()
+
+	// Set config project
+	if err := Set("default_project", "TESTPROJ"); err != nil {
+		t.Fatalf("Failed to set config: %v", err)
+	}
+
+	cmd := &cobra.Command{}
+	cmd.Flags().String("project", "", "Project key")
+
+	// Don't set flag, should use config value
+	project, err := ResolveProject(cmd)
+	if err != nil {
+		t.Fatalf("ResolveProject() failed: %v", err)
+	}
+	if project != "TESTPROJ" {
+		t.Errorf("ResolveProject() = %q, want TESTPROJ (from config)", project)
+	}
+}
+
 func TestResolveProject_Error(t *testing.T) {
+	// Clear any existing config project
+	originalCfg, _ := Get()
+	defer func() {
+		if originalCfg != nil {
+			Save(originalCfg)
+		}
+	}()
+
+	// Clear default_project
+	if err := Set("default_project", ""); err != nil {
+		t.Fatalf("Failed to clear config: %v", err)
+	}
+
 	cmd := &cobra.Command{}
 	cmd.Flags().String("project", "", "Project key")
 
@@ -154,20 +192,163 @@ func TestResolveProject_Error(t *testing.T) {
 }
 
 func TestSet_DefaultProject(t *testing.T) {
-	// This test requires actual storage, so we'll test the validation logic separately
-	// and integration tests will test the full flow
+	originalCfg, _ := Get()
+	defer func() {
+		if originalCfg != nil {
+			Save(originalCfg)
+		}
+	}()
+
+	// Test setting default_project
+	if err := Set("default_project", "TEST123"); err != nil {
+		t.Fatalf("Set() failed: %v", err)
+	}
+
+	// Verify it was set
+	value, err := GetValue("default_project")
+	if err != nil {
+		t.Fatalf("GetValue() failed: %v", err)
+	}
+	if value != "TEST123" {
+		t.Errorf("GetValue() = %q, want TEST123", value)
+	}
+
+	// Test clearing it
+	if err := Set("default_project", ""); err != nil {
+		t.Fatalf("Set() failed to clear: %v", err)
+	}
+
+	value, err = GetValue("default_project")
+	if err != nil {
+		t.Fatalf("GetValue() failed: %v", err)
+	}
+	if value != "" {
+		t.Errorf("GetValue() after clear = %q, want empty", value)
+	}
 }
 
 func TestSet_DefaultFormat(t *testing.T) {
-	// This test requires actual storage, so we'll test the validation logic separately
+	originalCfg, _ := Get()
+	defer func() {
+		if originalCfg != nil {
+			Save(originalCfg)
+		}
+	}()
+
+	// Test setting default_format
+	if err := Set("default_format", "json"); err != nil {
+		t.Fatalf("Set() failed: %v", err)
+	}
+
+	// Verify it was set
+	value, err := GetValue("default_format")
+	if err != nil {
+		t.Fatalf("GetValue() failed: %v", err)
+	}
+	if value != "json" {
+		t.Errorf("GetValue() = %q, want json", value)
+	}
+
+	// Test setting to lson
+	if err := Set("default_format", "lson"); err != nil {
+		t.Fatalf("Set() failed: %v", err)
+	}
+
+	value, err = GetValue("default_format")
+	if err != nil {
+		t.Fatalf("GetValue() failed: %v", err)
+	}
+	if value != "lson" {
+		t.Errorf("GetValue() = %q, want lson", value)
+	}
 }
 
 func TestSet_InvalidKey(t *testing.T) {
-	// We can't easily test Set without storage, but we can test validation
+	err := Set("invalid_key", "value")
+	if err == nil {
+		t.Fatal("Set() should fail for invalid key")
+	}
+	if err.Error() != "config: unknown config key \"invalid_key\"" {
+		t.Errorf("Set() error = %q, want error about unknown key", err.Error())
+	}
+}
+
+func TestSet_InvalidFormat(t *testing.T) {
+	originalCfg, _ := Get()
+	defer func() {
+		if originalCfg != nil {
+			Save(originalCfg)
+		}
+	}()
+
+	err := Set("default_format", "invalid_format")
+	if err == nil {
+		t.Fatal("Set() should fail for invalid format")
+	}
+	if err.Error() != "config: invalid format \"invalid_format\" (must be modern, json, or lson)" {
+		t.Errorf("Set() error = %q, want error about invalid format", err.Error())
+	}
+}
+
+func TestSet_InvalidProjectKey(t *testing.T) {
+	originalCfg, _ := Get()
+	defer func() {
+		if originalCfg != nil {
+			Save(originalCfg)
+		}
+	}()
+
+	err := Set("default_project", "invalid-project")
+	if err == nil {
+		t.Fatal("Set() should fail for invalid project key")
+	}
+	if err.Error() != "config: invalid project key \"invalid-project\" (must be uppercase alphanumeric)" {
+		t.Errorf("Set() error = %q, want error about invalid project key", err.Error())
+	}
 }
 
 func TestGetValue(t *testing.T) {
-	// This test requires actual storage
+	originalCfg, _ := Get()
+	defer func() {
+		if originalCfg != nil {
+			Save(originalCfg)
+		}
+	}()
+
+	// Test getting default_project
+	if err := Set("default_project", "GETTEST"); err != nil {
+		t.Fatalf("Set() failed: %v", err)
+	}
+
+	value, err := GetValue("default_project")
+	if err != nil {
+		t.Fatalf("GetValue() failed: %v", err)
+	}
+	if value != "GETTEST" {
+		t.Errorf("GetValue() = %q, want GETTEST", value)
+	}
+
+	// Test getting default_format
+	if err := Set("default_format", "lson"); err != nil {
+		t.Fatalf("Set() failed: %v", err)
+	}
+
+	value, err = GetValue("default_format")
+	if err != nil {
+		t.Fatalf("GetValue() failed: %v", err)
+	}
+	if value != "lson" {
+		t.Errorf("GetValue() = %q, want lson", value)
+	}
+
+	// Test getting invalid key
+	_, err = GetValue("invalid_key")
+	if err == nil {
+		t.Fatal("GetValue() should fail for invalid key")
+	}
+	if err.Error() != "config: unknown config key \"invalid_key\"" {
+		t.Errorf("GetValue() error = %q, want error about unknown key", err.Error())
+	}
 }
 
 func TestIsValidFormat(t *testing.T) {
@@ -242,6 +423,12 @@ func TestValidate(t *testing.T) {
 			err := Validate(tt.cfg)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && !tt.wantErr {
+				// Verify error message has config: prefix
+				if err.Error()[:7] != "config:" {
+					t.Errorf("Validate() error should have 'config:' prefix, got: %q", err.Error())
+				}
 			}
 		})
 	}

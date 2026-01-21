@@ -148,13 +148,13 @@ func isValidProjectKey(key string) bool {
 // Validate validates the entire config struct.
 func Validate(cfg *Config) error {
 	if cfg.DefaultFormat != "" && !isValidFormat(cfg.DefaultFormat) {
-		return fmt.Errorf("invalid default_format %q", cfg.DefaultFormat)
+		return fmt.Errorf("config: invalid default_format %q", cfg.DefaultFormat)
 	}
 
 	// Project key validation (uppercase alphanumeric)
 	if cfg.DefaultProject != "" {
 		if !isValidProjectKey(cfg.DefaultProject) {
-			return fmt.Errorf("invalid project key %q (must be uppercase alphanumeric)", cfg.DefaultProject)
+			return fmt.Errorf("config: invalid project key %q (must be uppercase alphanumeric)", cfg.DefaultProject)
 		}
 	}
 
