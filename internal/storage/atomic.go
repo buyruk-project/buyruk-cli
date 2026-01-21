@@ -93,17 +93,22 @@ func extractProjectKeyFromPath(path string) (string, error) {
 	// Split the path into components
 	parts := strings.Split(cleanPath, string(filepath.Separator))
 
-	// Find the "projects" directory index
+	// Find the "projects" directory index.
+	// Search from the end so we use the innermost "projects" segment,
+	// reducing the chance of matching an unrelated parent directory.
 	projectsIndex := -1
-	for i, part := range parts {
-		if part == "projects" {
+	for i := len(parts) - 1; i >= 0; i-- {
+		if parts[i] == "projects" {
 			projectsIndex = i
 			break
 		}
 	}
 
-	if projectsIndex == -1 || projectsIndex+1 >= len(parts) {
-		return "", fmt.Errorf("storage: invalid path format, expected projects/[projectKey]/...")
+	// Validate basic structure: [ConfigDir]/projects/[projectKey]/...
+	// Require at least one component before "projects" (the config dir or its parent),
+	// and at least one component after it for the project key.
+	if projectsIndex <= 0 || projectsIndex+1 >= len(parts) {
+		return "", fmt.Errorf("storage: invalid path format, expected [ConfigDir]/projects/[projectKey]/...")
 	}
 
 	return parts[projectsIndex+1], nil
