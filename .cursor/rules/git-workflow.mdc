@@ -1,0 +1,37 @@
+---
+description: Automated Git & GitHub CLI workflow for atomic commits and draft PRs
+globs: **/*
+---
+
+# Git & GitHub Workflow (Atomic & Professional)
+
+When I ask you to "ship this" or "prepare a PR," follow these exact steps using the terminal. If i didn't specify the base branch is always origin/main and you should create branch from origin/main.
+
+## 1. Branch Creation
+- **Naming Convention**: `type/short-description` (e.g., `feat/add-lson-formatter` or `fix/windows-path-bug`).
+- **Command**: `git checkout -b <branch-name>`.
+
+## 2. Atomic Commits
+- **Strategy**: Break changes into logical units. Do not commit everything at once.
+- **Message Format**: Use **Conventional Commits**.
+  - `feat(scope): ...`, `fix(scope): ...`, `docs: ...`
+- **Logic**: 
+  - If a change touches storage logic AND a CLI flag, make TWO commits.
+  - `git add <specific-files>` followed by `git commit -m "..."`.
+
+## 3. Pushing & Draft PR
+- **Push**: `git push -u origin <branch-name>`.
+- **Draft PR**: Use `gh pr create --draft`.
+- **PR Title**: A clean, capitalized version of the branch purpose.
+- **PR Body**: Generate a Markdown description that includes:
+  - **Summary**: What changed?
+  - **Atomic Changes**: A bulleted list of the commits made.
+  - **Cross-Platform Check**: Mention that logic was verified for Win/Mac/Linux.
+
+## 4. Automation Example
+If I say "Create a PR for the new login feature," you should run:
+1. `git checkout -b feat/login-system`
+2. `git add internal/auth/... && git commit -m "feat(auth): implement oauth2 core"`
+3. `git add cmd/... && git commit -m "feat(cli): add login command"`
+4. `git push -u origin feat/login-system`
+5. `gh pr create --draft --title "Implement OAuth2 Login System" --body "..."`

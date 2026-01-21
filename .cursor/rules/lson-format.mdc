@@ -1,0 +1,22 @@
+---
+description: Rules for implementing the L-SON (LLM-Simplified Object Notation) output
+globs: **/*.go
+---
+
+# L-SON Implementation Standards
+
+L-SON is a token-efficient format used when users pass the `--format lson` flag.
+
+## Formatting Rules
+- Use the `@` prefix for all keys.
+- Use uppercase for keys (e.g., `@ID`, `@STATUS`, `@TITLE`).
+- Do not use JSON braces, brackets, or quotes unless they are part of the value content.
+- Example structure:
+  ```text
+  @ID: CORE-101
+  @STATUS: DOING
+  @PRIORITY: CRITICAL
+  @TITLE: Task Title Here
+  @DESC: Markdown description...
+  ```
+  

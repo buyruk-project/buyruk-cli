@@ -1,0 +1,21 @@
+---
+description: Visual and UX standards for the buyruk CLI
+globs: **/*.go
+---
+
+# CLI UX & Rendering Rules
+
+## Visuals
+- **Styles**: Use `charmbracelet/lipgloss` for all colors and padding.
+- **Tables**: Use `olekukonko/tablewriter` for lists.
+- **Markdown**: Use `charmbracelet/glamour` for rendering task descriptions.
+
+## Cross-Platform UI
+- Do not use symbols that are known to break in standard Windows CMD (stick to basic UTF-8 or provide fallbacks).
+- Errors MUST be written to `os.Stderr` and styled in Red.
+- Success messages should be styled in Green.
+
+## Command Structure
+- All commands are built using `spf13/cobra`.
+- Every command must have a `.Short` and `.Long` description.
+- Use `PersistentFlags` for global configuration like `--project` or `--format`.

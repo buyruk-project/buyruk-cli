@@ -1,0 +1,22 @@
+---
+description: Best practices for Go error handling and wrapping
+globs: **/*.go
+---
+
+# Go Error Handling Standards
+
+## 1. Wrapping vs. Returning
+- **Always Wrap** if adding context: `fmt.Errorf("fetching task %s: %w", id, err)`.
+- **Don't Wrap** if the error is already descriptive enough (e.g., `os.PathError` often includes the filename).
+- **Never Log and Return**: A function should either handle the error (log + recover/exit) or return it to the caller. Doing both creates "log spam."
+
+## 2. Error Inspection
+- Use `errors.Is(err, sentinelErr)` for checking specific errors (like `os.ErrNotExist`).
+- Use `errors.As(err, &targetStruct)` for custom error types.
+
+## 3. Style Rules
+- Error messages should be lowercase and not end with punctuation (e.g., use `"failed to open file"` not `"Failed to open file!"`).
+- Use "action-oriented" context: Prefer `"loading config: %w"` over `"error occurred in loadConfig: %w"`.
+
+## 4. CLI Specifics
+- Only `main.go` or the `RunE` function in Cobra should print to `os.Stderr`. All other layers return errors.

@@ -1,0 +1,19 @@
+---
+description: Rules for filesystem persistence and atomic data writes
+globs: **/*.go
+---
+
+# Persistence & Safety Rules
+
+When modifying any JSON files in `[ConfigDir]` or `projects/`, you MUST adhere to the buyruk atomic protocol.
+
+## Atomic Write Protocol
+1. **Locking**: Check for `.buyruk.lock`. If it exists, implement a 5-second retry loop (100ms intervals).
+2. **Intent**: Before writing, a `.buyruk_pending` file must be created containing the operation metadata.
+3. **Temp Swap**: Write data to a `.tmp` suffix file first, then use `os.Rename` for the final overwrite.
+4. **Cleanup**: Ensure the lock and pending files are removed even if the write fails (use `defer`).
+
+## Pathing
+- NEVER use hardcoded slashes (e.g., `path + "/file.json"`).
+- ALWAYS use `filepath.Join()`.
+- Use `os.UserConfigDir()` to resolve the base application path.

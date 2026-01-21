@@ -1,0 +1,22 @@
+---
+description: Rules for ensuring Windows, macOS, and Linux compatibility
+globs: **/*.go
+---
+
+# Cross-Platform Compatibility Rules
+
+## 1. Filesystem Paths
+- **NO HARDCODED SLASHES**: Never use `/` or `\`.
+- **Joining**: Use `filepath.Join(a, b)` for all path construction.
+- **Cleaning**: Use `filepath.Clean(path)` on user input to normalize separators.
+- **Home Directory**: Use `os.UserHomeDir()` or `os.UserConfigDir()` instead of `$HOME` or `%APPDATA%`.
+
+## 2. OS-Specific Logic
+- If a feature only works on one OS (e.g., Windows Registry or Unix Permissions), use **Build Tags**:
+  - `//go:build windows` for `*_windows.go`
+  - `//go:build !windows` for unix-like logic.
+- Avoid using `runtime.GOOS == "windows"` inside general logic if possible; prefer abstraction via interfaces.
+
+## 3. Terminal & Shell
+- Use `filepath.FromSlash()` when converting generic internal paths to OS-specific ones for display.
+- Ensure all TUI colors (Lipgloss) are tested for "No Color" environments (respect `NO_COLOR` env var).
