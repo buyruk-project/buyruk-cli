@@ -1,6 +1,6 @@
-# Binaries
-buyruk
-buyruk.exe
+# Binaries (in root directory)
+/buyruk
+/buyruk.exe
 *.exe
 *.dll
 *.so
