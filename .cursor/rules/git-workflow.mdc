@@ -27,6 +27,9 @@ When I ask you to "ship this" or "prepare a PR," follow these exact steps using 
   - **Summary**: What changed?
   - **Atomic Changes**: A bulleted list of the commits made.
   - **Cross-Platform Check**: Mention that logic was verified for Win/Mac/Linux.
+- **Build Artifacts**: Only trigger artifact uploads if explicitly requested in the prompt. Options:
+  - Add `build-artifacts` label to PR (can be added anytime, even after PR creation - auto-triggers workflow)
+  - Use GitHub Actions UI → "Run workflow" → check "Upload build artifacts" (manual trigger)
 
 ## 4. Automation Example
 If I say "Create a PR for the new login feature," you should run:
