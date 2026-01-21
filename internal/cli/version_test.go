@@ -19,14 +19,13 @@ func TestNewVersionCmd(t *testing.T) {
 }
 
 func TestVersionCmdOutputModern(t *testing.T) {
-	// Set format to modern
-	formatFlag = "modern"
+	rootCmd := NewRootCmd()
+	rootCmd.SetArgs([]string{"version", "--format", "modern"})
 	
-	cmd := NewVersionCmd()
 	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
+	rootCmd.SetOut(buf)
 	
-	err := cmd.Execute()
+	err := rootCmd.Execute()
 	if err != nil {
 		t.Fatalf("version command failed: %v", err)
 	}
@@ -39,14 +38,13 @@ func TestVersionCmdOutputModern(t *testing.T) {
 }
 
 func TestVersionCmdOutputJSON(t *testing.T) {
-	// Set format to json
-	formatFlag = "json"
+	rootCmd := NewRootCmd()
+	rootCmd.SetArgs([]string{"version", "--format", "json"})
 	
-	cmd := NewVersionCmd()
 	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
+	rootCmd.SetOut(buf)
 	
-	err := cmd.Execute()
+	err := rootCmd.Execute()
 	if err != nil {
 		t.Fatalf("version command failed: %v", err)
 	}
@@ -59,14 +57,13 @@ func TestVersionCmdOutputJSON(t *testing.T) {
 }
 
 func TestVersionCmdOutputLSON(t *testing.T) {
-	// Set format to lson
-	formatFlag = "lson"
+	rootCmd := NewRootCmd()
+	rootCmd.SetArgs([]string{"version", "--format", "lson"})
 	
-	cmd := NewVersionCmd()
 	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
+	rootCmd.SetOut(buf)
 	
-	err := cmd.Execute()
+	err := rootCmd.Execute()
 	if err != nil {
 		t.Fatalf("version command failed: %v", err)
 	}

@@ -4,11 +4,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	formatFlag  string
-	projectFlag string
-)
-
 // NewRootCmd creates and returns the root command for buyruk CLI.
 func NewRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
@@ -18,8 +13,8 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	// Persistent flags
-	rootCmd.PersistentFlags().StringVar(&formatFlag, "format", "modern", "Output format (modern, json, lson)")
-	rootCmd.PersistentFlags().StringVar(&projectFlag, "project", "", "Project key to operate on")
+	rootCmd.PersistentFlags().String("format", "modern", "Output format (modern, json, lson)")
+	rootCmd.PersistentFlags().String("project", "", "Project key to operate on")
 
 	// Add subcommands
 	rootCmd.AddCommand(NewVersionCmd())
@@ -27,12 +22,14 @@ func NewRootCmd() *cobra.Command {
 	return rootCmd
 }
 
-// GetFormat returns the current format flag value.
-func GetFormat() string {
-	return formatFlag
+// GetFormat returns the format flag value from the command.
+func GetFormat(cmd *cobra.Command) string {
+	format, _ := cmd.Flags().GetString("format")
+	return format
 }
 
-// GetProject returns the current project flag value.
-func GetProject() string {
-	return projectFlag
+// GetProject returns the project flag value from the command.
+func GetProject(cmd *cobra.Command) string {
+	project, _ := cmd.Flags().GetString("project")
+	return project
 }

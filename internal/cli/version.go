@@ -14,7 +14,7 @@ func NewVersionCmd() *cobra.Command {
 		Short: "Print the version number of buyruk",
 		Long:  "Print the version number of buyruk CLI tool",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			format := GetFormat()
+			format := GetFormat(cmd)
 			out := cmd.OutOrStdout()
 			switch format {
 			case "json":
