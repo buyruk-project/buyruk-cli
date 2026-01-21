@@ -1,0 +1,87 @@
+---
+description: Project structure and architecture patterns following GitHub CLI
+globs: **/*.go
+---
+
+# Project Structure & Architecture
+
+## Directory Organization (GitHub CLI Pattern)
+
+Following the `gh` CLI architecture pattern for maintainability and testability:
+
+### Core Directories
+
+- **`cmd/buyruk/`**: Entry point only
+  - Contains `main.go` with minimal logic
+  - Simply calls `cli.NewRootCmd().Execute()`
+  - No business logic here
+
+- **`internal/cli/`**: All Cobra commands
+  - `root.go`: Root command with persistent flags (`--format`, `--project`)
+  - `version.go`, `list.go`, `create.go`, etc.: One file per command
+  - Each command file exports `New<Command>Cmd() *cobra.Command`
+  - Commands registered in `root.go` via `AddCommand()`
+
+- **`internal/build/`**: Build-time metadata
+  - `build.go`: Version string, build date (can be overridden via `-ldflags`)
+  - Used for `version` command and telemetry
+
+- **`internal/ui/`**: Rendering and presentation
+  - Table formatting, colors, markdown rendering
+  - Format-specific output logic (modern/json/lson)
+
+- **`internal/storage/`**: Filesystem operations
+  - Atomic write protocol implementation
+  - Lock management, transaction logs
+  - JSON read/write utilities
+
+- **`internal/config/`**: Configuration management
+  - Reading/writing `config.json`
+  - Default value resolution
+
+## Command Implementation Pattern
+
+### File Structure
+```go
+// internal/cli/version.go
+package cli
+
+import (
+    "fmt"
+    "github.com/buyruk-project/buyruk-cli/internal/build"
+    "github.com/spf13/cobra"
+)
+
+func NewVersionCmd() *cobra.Command {
+    cmd := &cobra.Command{
+        Use:   "version",
+        Short: "Print version",
+        Long:  "Print the version number...",
+        RunE: func(cmd *cobra.Command, args []string) error {
+            out := cmd.OutOrStdout()  // NOT os.Stdout
+            fmt.Fprintf(out, "version %s\n", build.Version)
+            return nil
+        },
+    }
+    return cmd
+}
+```
+
+### Key Patterns
+
+1. **Output Handling**: Always use `cmd.OutOrStdout()` / `cmd.ErrOrStderr()` instead of `os.Stdout`/`os.Stderr` for testability
+2. **Error Handling**: Use `RunE` (not `Run`) to return errors; Cobra handles printing to stderr
+3. **Flag Access**: Use `GetFormat()`, `GetProject()` helpers from `root.go` to access persistent flags
+4. **Testing**: Each command should have a corresponding `*_test.go` file with unit tests
+
+## Testing Patterns
+
+- **Command Tests**: Use `bytes.Buffer` with `cmd.SetOut()` to capture output
+- **Integration Tests**: Test commands through the root command with `SetArgs()`
+- **Test Files**: Co-locate with source files (`internal/cli/version_test.go`)
+
+## Import Organization
+
+- Keep imports local to `internal/` packages
+- External dependencies only in `cmd/` and `internal/` (never in root)
+- Use full module path: `github.com/buyruk-project/buyruk-cli/internal/...`

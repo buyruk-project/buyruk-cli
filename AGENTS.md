@@ -33,16 +33,36 @@ L-SON is our token-optimized format for LLM context.
 - `projects/[KEY]/project.json`: The **Index File**. Must be updated whenever an issue is created/deleted.
 - `projects/[KEY]/issues/`: Storage for individual task details.
 
+## 🏗 Project Structure (GitHub CLI Pattern)
+Following the GitHub CLI (`gh`) architecture pattern:
+- **`cmd/buyruk/`**: Entry point (`main.go`) - minimal, just calls `cli.Execute()`
+- **`internal/cli/`**: All Cobra commands and command logic
+  - `root.go`: Root command with persistent flags
+  - `version.go`, `list.go`, etc.: Individual command implementations
+- **`internal/build/`**: Build-time metadata (version, build date, etc.)
+- **`internal/ui/`**: Rendering logic (tables, colors, markdown)
+- **`internal/storage/`**: Filesystem operations and atomic write logic
+- **`internal/config/`**: Configuration management
+
 ## 🛠 Commands & Workflows
-- **Build**: `go build -o buyruk ./main.go`
+- **Build**: `go build -o buyruk ./cmd/buyruk`
 - **Test**: `go test ./...` (Always run tests before suggesting a PR).
 - **Repair**: If `project.json` (index) is out of sync with `issues/`, use the repair logic.
 
 ## 📝 Rules of Engagement
-- **Always Do**: Use early returns. Wrap errors with `fmt.Errorf("context: %w", err)`.
+- **Always Do**: 
+  - Use early returns. Wrap errors with `fmt.Errorf("context: %w", err)`.
+  - Use `cmd.OutOrStdout()` and `cmd.ErrOrStderr()` in Cobra commands (not `os.Stdout`/`os.Stderr`) for testability.
+  - Write tests for all new commands and packages.
 - **Ask First**: Before adding new external dependencies to `go.mod`.
-- **Never Do**: Do not use global variables for state; pass a `Context` or `App` struct.
-- **UX**: Errors must go to `os.Stderr`. Success messages should use `lipgloss` styles.
+- **Never Do**: 
+  - Do not use global variables for state; pass a `Context` or `App` struct.
+  - Do not use `os.Stdout`/`os.Stderr` directly in command handlers; use Cobra's output writers.
+- **UX**: Errors must go to `os.Stderr` (via `cmd.ErrOrStderr()`). Success messages should use `lipgloss` styles.
+- **Command Structure**: 
+  - Each command should be in its own file (`internal/cli/<command>.go`)
+  - Use `New<Command>Cmd()` factory pattern returning `*cobra.Command`
+  - Register commands in `root.go` via `rootCmd.AddCommand()`
 
 ## References
 Rules in .cursor/rules directory and README.md for project details.

@@ -19,3 +19,6 @@ globs: **/*.go
 - All commands are built using `spf13/cobra`.
 - Every command must have a `.Short` and `.Long` description.
 - Use `PersistentFlags` for global configuration like `--project` or `--format`.
+- **Output Handling**: Always use `cmd.OutOrStdout()` and `cmd.ErrOrStderr()` instead of `os.Stdout`/`os.Stderr` for testability.
+- **Error Handling**: Use `RunE` (returns error) instead of `Run` when errors need to be propagated.
+- **Command Factory**: Each command should be in its own file with a `New<Command>Cmd() *cobra.Command` function.
