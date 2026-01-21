@@ -58,8 +58,14 @@ func NewVersionCmd() *cobra.Command {
         Short: "Print version",
         Long:  "Print the version number...",
         RunE: func(cmd *cobra.Command, args []string) error {
+            format := GetFormat(cmd)  // Access flag through command context
             out := cmd.OutOrStdout()  // NOT os.Stdout
-            fmt.Fprintf(out, "version %s\n", build.Version)
+            switch format {
+            case "json":
+                fmt.Fprintf(out, `{"version":"%s"}\n`, build.Version)
+            default:
+                fmt.Fprintf(out, "version %s\n", build.Version)
+            }
             return nil
         },
     }
@@ -71,13 +77,20 @@ func NewVersionCmd() *cobra.Command {
 
 1. **Output Handling**: Always use `cmd.OutOrStdout()` / `cmd.ErrOrStderr()` instead of `os.Stdout`/`os.Stderr` for testability
 2. **Error Handling**: Use `RunE` (not `Run`) to return errors; Cobra handles printing to stderr
-3. **Flag Access**: Use `GetFormat()`, `GetProject()` helpers from `root.go` to access persistent flags
+3. **Flag Access**: 
+   - **NEVER use package-level global variables** for flag storage (causes test pollution and race conditions)
+   - Access flags through command context: `cmd.Flags().GetString("flag-name")`
+   - Use helper functions like `GetFormat(cmd)` and `GetProject(cmd)` that accept `*cobra.Command`
+   - Persistent flags are accessible from subcommands via `cmd.Flags()` (Cobra handles inheritance)
 4. **Testing**: Each command should have a corresponding `*_test.go` file with unit tests
+5. **State Management**: Pass command context (`*cobra.Command`) to access flags/config, never use globals
 
 ## Testing Patterns
 
 - **Command Tests**: Use `bytes.Buffer` with `cmd.SetOut()` to capture output
-- **Integration Tests**: Test commands through the root command with `SetArgs()`
+- **Integration Tests**: Test commands through the root command with `SetArgs()` to set flags properly
+- **Test Isolation**: Never modify package-level global variables in tests; use `rootCmd.SetArgs([]string{"--flag", "value"})` instead
+- **Parallel Safety**: Tests must be safe for parallel execution (`go test -parallel N`); avoid shared mutable state
 - **Test Files**: Co-locate with source files (`internal/cli/version_test.go`)
 
 ## Import Organization

@@ -22,3 +22,15 @@ globs: **/*.go
 - **Output Handling**: Always use `cmd.OutOrStdout()` and `cmd.ErrOrStderr()` instead of `os.Stdout`/`os.Stderr` for testability.
 - **Error Handling**: Use `RunE` (returns error) instead of `Run` when errors need to be propagated.
 - **Command Factory**: Each command should be in its own file with a `New<Command>Cmd() *cobra.Command` function.
+
+## Flag Access Patterns
+
+- **No Global Variables**: Never store flag values in package-level variables. This causes test pollution and race conditions.
+- **Access Through Command Context**: Always access flags through the `*cobra.Command` parameter in `RunE`:
+  ```go
+  format, _ := cmd.Flags().GetString("format")
+  // Or use helper: format := GetFormat(cmd)
+  ```
+- **Persistent Flags**: Persistent flags are inherited by subcommands and accessible via `cmd.Flags().GetString()`.
+- **Flag Definition**: Define flags without binding to variables: `rootCmd.PersistentFlags().String("format", "modern", "description")`
+- **Helper Functions**: Create helper functions that accept `*cobra.Command` for flag access (e.g., `GetFormat(cmd)`, `GetProject(cmd)`).

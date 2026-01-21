@@ -57,7 +57,9 @@ Following the GitHub CLI (`gh`) architecture pattern:
 - **Ask First**: Before adding new external dependencies to `go.mod`.
 - **Never Do**: 
   - Do not use global variables for state; pass a `Context` or `App` struct.
+  - Do not use package-level variables for flag storage (causes test pollution and race conditions).
   - Do not use `os.Stdout`/`os.Stderr` directly in command handlers; use Cobra's output writers.
+  - Do not modify global state in tests; use `cmd.SetArgs()` to set flags instead.
 - **UX**: Errors must go to `os.Stderr` (via `cmd.ErrOrStderr()`). Success messages should use `lipgloss` styles.
 - **Command Structure**: 
   - Each command should be in its own file (`internal/cli/<command>.go`)
