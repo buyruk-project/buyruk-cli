@@ -44,6 +44,7 @@ jobs:
 
   test:
     name: Test on ${{ matrix.os }}
+    needs: lint
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
@@ -76,10 +77,17 @@ jobs:
         shell: bash
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            # Check if PR has 'build-artifacts' label using GitHub Actions expression
+            # Check if PR has 'build-artifacts' label (exact match, not substring)
             LABELS='${{ toJSON(github.event.pull_request.labels.*.name) }}'
-            if echo "$LABELS" | grep -q "build-artifacts"; then
-              echo "should_upload=true" >> $GITHUB_OUTPUT
+            # Handle null, empty array, or parse JSON array for exact match
+            if [ -n "$LABELS" ] && [ "$LABELS" != "null" ] && [ "$LABELS" != "[]" ]; then
+              # Parse JSON array: remove brackets/quotes, split by comma, check each label
+              # Use grep with word boundaries for exact match (handles JSON array format)
+              if echo "$LABELS" | grep -oE '"[^"]+"' | grep -qx '"build-artifacts"'; then
+                echo "should_upload=true" >> $GITHUB_OUTPUT
+              else
+                echo "should_upload=false" >> $GITHUB_OUTPUT
+              fi
             else
               echo "should_upload=false" >> $GITHUB_OUTPUT
             fi
