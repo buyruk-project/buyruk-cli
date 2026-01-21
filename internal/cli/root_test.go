@@ -16,7 +16,7 @@ func TestNewRootCmd(t *testing.T) {
 
 func TestRootCmdFlags(t *testing.T) {
 	cmd := NewRootCmd()
-	
+
 	// Test format flag
 	formatFlag := cmd.PersistentFlags().Lookup("format")
 	if formatFlag == nil {
@@ -50,12 +50,12 @@ func TestRootCmdHasVersionSubcommand(t *testing.T) {
 func TestGetFormat(t *testing.T) {
 	cmd := NewRootCmd()
 	cmd.SetArgs([]string{"--format", "test-format"})
-	
+
 	// Parse flags
 	if err := cmd.ParseFlags([]string{"--format", "test-format"}); err != nil {
 		t.Fatalf("Failed to parse flags: %v", err)
 	}
-	
+
 	format := GetFormat(cmd)
 	if format != "test-format" {
 		t.Errorf("Expected GetFormat() to return 'test-format', got '%s'", format)
@@ -65,12 +65,12 @@ func TestGetFormat(t *testing.T) {
 func TestGetProject(t *testing.T) {
 	cmd := NewRootCmd()
 	cmd.SetArgs([]string{"--project", "test-project"})
-	
+
 	// Parse flags
 	if err := cmd.ParseFlags([]string{"--project", "test-project"}); err != nil {
 		t.Fatalf("Failed to parse flags: %v", err)
 	}
-	
+
 	project := GetProject(cmd)
 	if project != "test-project" {
 		t.Errorf("Expected GetProject() to return 'test-project', got '%s'", project)
