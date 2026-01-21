@@ -61,7 +61,7 @@ jobs:
           cache: true # Speeds up subsequent runs
 
       - name: Build
-        run: go build ./cmd/buyruk
+        run: go build -o buyruk ./cmd/buyruk
         timeout-minutes: 5
 
       - name: Run Tests
@@ -73,9 +73,10 @@ jobs:
 
       - name: Check if should upload artifacts
         id: check-upload
+        shell: bash
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            # Check if PR has 'build-artifacts' label
+            # Check if PR has 'build-artifacts' label using GitHub Actions expression
             LABELS='${{ toJSON(github.event.pull_request.labels.*.name) }}'
             if echo "$LABELS" | grep -q "build-artifacts"; then
               echo "should_upload=true" >> $GITHUB_OUTPUT
@@ -101,5 +102,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: buyruk-${{ matrix.os }}
-          path: buyruk*
+          path: |
+            buyruk
+            buyruk.exe
           if-no-files-found: ignore
