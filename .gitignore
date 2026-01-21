@@ -28,3 +28,9 @@ go.work
 # OS
 .DS_Store
 Thumbs.db
+
+# Test artifacts
+internal/storage/projects/
+internal/storage/**/.buyruk.lock
+internal/storage/**/.buyruk_pending
+internal/storage/**/*.tmp
