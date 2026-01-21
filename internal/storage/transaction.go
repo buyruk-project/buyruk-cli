@@ -78,32 +78,32 @@ func RollbackTransaction(projectKey string) error {
 }
 
 // CheckPendingTransaction checks if there's a pending transaction and returns it.
-// Returns true if a pending transaction exists, along with the transaction data.
-func CheckPendingTransaction(projectKey string) (bool, map[string]interface{}, error) {
+// Returns true if a pending transaction exists, along with the full transaction log.
+func CheckPendingTransaction(projectKey string) (bool, TransactionLog, error) {
 	projectDir, err := ProjectDir(projectKey)
 	if err != nil {
-		return false, nil, err
+		return false, TransactionLog{}, err
 	}
 
 	transactionPath := filepath.Join(projectDir, ".buyruk_pending")
 	_, err = os.Stat(transactionPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return false, nil, nil
+			return false, TransactionLog{}, nil
 		}
-		return false, nil, fmt.Errorf("storage: failed to check transaction log: %w", err)
+		return false, TransactionLog{}, fmt.Errorf("storage: failed to check transaction log: %w", err)
 	}
 
 	// Read and parse the transaction log
 	data, err := os.ReadFile(transactionPath)
 	if err != nil {
-		return false, nil, fmt.Errorf("storage: failed to read transaction log: %w", err)
+		return false, TransactionLog{}, fmt.Errorf("storage: failed to read transaction log: %w", err)
 	}
 
 	var transaction TransactionLog
 	if err := json.Unmarshal(data, &transaction); err != nil {
-		return false, nil, fmt.Errorf("storage: failed to unmarshal transaction log: %w", err)
+		return false, TransactionLog{}, fmt.Errorf("storage: failed to unmarshal transaction log: %w", err)
 	}
 
-	return true, transaction.Metadata, nil
+	return true, transaction, nil
 }
