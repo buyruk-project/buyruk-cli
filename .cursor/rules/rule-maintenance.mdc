@@ -1,0 +1,65 @@
+---
+description: Guidelines for maintaining and updating cursor rules based on code changes
+globs: **/*
+---
+
+# Rule Maintenance & Evolution
+
+## Post-Implementation Rule Review
+
+After completing a code implementation, review whether the changes warrant updates to cursor rules or documentation.
+
+### When to Suggest Rule Updates
+
+Suggest rule updates or creation when:
+
+1. **Pattern Changes**: Implementation introduces a new architectural pattern, design decision, or coding convention that should be standardized
+2. **Anti-Pattern Discovery**: Code review or refactoring reveals an anti-pattern that should be documented to prevent recurrence
+3. **Best Practice Emergence**: A better approach is discovered that should become the standard (e.g., avoiding global variables, using command context for flags)
+4. **Testing Patterns**: New testing patterns or requirements emerge that should be codified
+5. **Cross-Cutting Concerns**: Changes affect multiple areas and should be documented in a shared rule
+6. **Documentation Gaps**: Implementation reveals missing or outdated documentation in rules or AGENTS.md
+
+### Rule Update Process
+
+1. **Identify the Need**: After completing code changes, analyze if:
+   - The change establishes a new pattern that should be followed consistently
+   - The change fixes a problem that should be prevented in future code
+   - The change introduces a convention that other developers should know about
+
+2. **Suggest to User**: Present the suggestion clearly:
+   ```
+   "I've completed the implementation. Based on the changes, I suggest updating 
+   [rule/documentation] to include [specific pattern/guideline] because [reason]. 
+   Should I proceed with updating it?"
+   ```
+
+3. **Update Only if Approved**: Only make rule/documentation changes if the user explicitly approves
+
+4. **Be Specific**: When suggesting updates, provide:
+   - Which rule/documentation file should be updated
+   - What specific content should be added/changed
+   - Why the update is valuable (prevents bugs, improves consistency, etc.)
+
+### Examples of Good Rule Update Opportunities
+
+- **Refactoring Global Variables**: After removing global state, update rules to document the pattern and why globals should be avoided
+- **Testing Improvements**: After fixing test pollution, update testing rules to prevent similar issues
+- **Flag Access Patterns**: After refactoring flag access, document the preferred approach in CLI rules
+- **Error Handling**: After standardizing error handling, document the pattern
+- **New Package Structure**: After creating a new internal package, update project structure documentation
+
+### Rule Organization
+
+- **Technical Patterns**: Update `.cursor/rules/project-structure.mdc` for architectural patterns
+- **CLI-Specific**: Update `.cursor/rules/cli-ux.mdc` for command-line interface patterns
+- **Cross-Platform**: Update `.cursor/rules/cross-platform.mdc` for OS-specific considerations
+- **High-Level Context**: Update `AGENTS.md` for project-wide conventions and vision
+- **New Domains**: Create new rule files for new concerns (e.g., `rule-maintenance.mdc`)
+
+### Always Suggest, Never Assume
+
+- **Always suggest** rule updates when there's a clear benefit
+- **Never automatically update** rules without user approval
+- **Explain the value** of the proposed update
+- **Be proactive** but respectful of user's decision-making
