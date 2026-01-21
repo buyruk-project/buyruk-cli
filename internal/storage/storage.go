@@ -56,8 +56,15 @@ func ProjectDir(projectKey string) (string, error) {
 		return "", err
 	}
 
-	// Clean the project key to prevent path traversal
+	// Clean the project key and validate it to prevent path traversal
 	cleanKey := filepath.Clean(projectKey)
+
+	// Reject keys that resolve to empty, current, or parent directories,
+	// or that contain any path separators (to keep keys as simple identifiers).
+	if cleanKey == "" || cleanKey == "." || cleanKey == ".." ||
+		strings.Contains(cleanKey, "/") || strings.Contains(cleanKey, "\\") {
+		return "", fmt.Errorf("storage: invalid project key %q", projectKey)
+	}
 	return filepath.Join(configDir, "projects", cleanKey), nil
 }
 
