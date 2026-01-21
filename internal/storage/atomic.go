@@ -54,7 +54,14 @@ func WriteJSONAtomic(path string, v interface{}) error {
 	}); err != nil {
 		return err
 	}
-	defer RollbackTransaction(projectKey)
+
+	// Track success to conditionally rollback only on failure
+	success := false
+	defer func() {
+		if !success {
+			RollbackTransaction(projectKey)
+		}
+	}()
 
 	// Step 3: Marshal JSON
 	data, err := json.MarshalIndent(v, "", "  ")
@@ -72,6 +79,8 @@ func WriteJSONAtomic(path string, v interface{}) error {
 		return err
 	}
 
+	// Mark as successful so rollback won't execute
+	success = true
 	return nil
 }
 

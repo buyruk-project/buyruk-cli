@@ -14,7 +14,7 @@ import (
 // TestConfigDir tests the ConfigDir function
 func TestConfigDir(t *testing.T) {
 	// Reset cached config dir for testing
-	cachedConfigDir = ""
+	resetConfigDirCache()
 
 	dir, err := ConfigDir()
 	if err != nil {
@@ -53,7 +53,7 @@ func TestProjectDir(t *testing.T) {
 	}()
 
 	// Reset cache
-	cachedConfigDir = ""
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -80,7 +80,7 @@ func TestProjectIndexPath(t *testing.T) {
 	}()
 
 	// Reset cache
-	cachedConfigDir = ""
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -107,7 +107,7 @@ func TestIssuePath(t *testing.T) {
 	}()
 
 	// Reset cache
-	cachedConfigDir = ""
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -134,7 +134,7 @@ func TestEpicPath(t *testing.T) {
 	}()
 
 	// Reset cache
-	cachedConfigDir = ""
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -161,7 +161,7 @@ func TestConfigFilePath(t *testing.T) {
 	}()
 
 	// Reset cache
-	cachedConfigDir = ""
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -183,9 +183,10 @@ func TestAcquireLock(t *testing.T) {
 	originalUserConfigDir := userConfigDirFunc
 	defer func() {
 		userConfigDirFunc = originalUserConfigDir
-		cachedConfigDir = ""
+		resetConfigDirCache()
 	}()
 
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -239,9 +240,10 @@ func TestWaitForLock(t *testing.T) {
 	originalUserConfigDir := userConfigDirFunc
 	defer func() {
 		userConfigDirFunc = originalUserConfigDir
-		cachedConfigDir = ""
+		resetConfigDirCache()
 	}()
 
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -282,9 +284,10 @@ func TestConcurrentLocks(t *testing.T) {
 	originalUserConfigDir := userConfigDirFunc
 	defer func() {
 		userConfigDirFunc = originalUserConfigDir
-		cachedConfigDir = ""
+		resetConfigDirCache()
 	}()
 
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -332,9 +335,10 @@ func TestBeginTransaction(t *testing.T) {
 	originalUserConfigDir := userConfigDirFunc
 	defer func() {
 		userConfigDirFunc = originalUserConfigDir
-		cachedConfigDir = ""
+		resetConfigDirCache()
 	}()
 
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -383,9 +387,10 @@ func TestCommitTransaction(t *testing.T) {
 	originalUserConfigDir := userConfigDirFunc
 	defer func() {
 		userConfigDirFunc = originalUserConfigDir
-		cachedConfigDir = ""
+		resetConfigDirCache()
 	}()
 
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -416,9 +421,10 @@ func TestRollbackTransaction(t *testing.T) {
 	originalUserConfigDir := userConfigDirFunc
 	defer func() {
 		userConfigDirFunc = originalUserConfigDir
-		cachedConfigDir = ""
+		resetConfigDirCache()
 	}()
 
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -449,9 +455,10 @@ func TestCheckPendingTransaction(t *testing.T) {
 	originalUserConfigDir := userConfigDirFunc
 	defer func() {
 		userConfigDirFunc = originalUserConfigDir
-		cachedConfigDir = ""
+		resetConfigDirCache()
 	}()
 
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -531,7 +538,7 @@ func TestWriteJSONAtomic(t *testing.T) {
 	}()
 
 	// Reset cache
-	cachedConfigDir = ""
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -654,9 +661,10 @@ func TestCrossPlatformPaths(t *testing.T) {
 	originalUserConfigDir := userConfigDirFunc
 	defer func() {
 		userConfigDirFunc = originalUserConfigDir
-		cachedConfigDir = ""
+		resetConfigDirCache()
 	}()
 
+	resetConfigDirCache()
 	userConfigDirFunc = func() (string, error) {
 		return tmpDir, nil
 	}
@@ -698,5 +706,52 @@ func TestCrossPlatformPaths(t *testing.T) {
 	}
 	if !strings.Contains(issuePath, "T-123.json") {
 		t.Error("IssuePath should contain issue ID and .json extension")
+	}
+}
+
+// TestPathTraversalProtection tests that path traversal attacks are prevented
+func TestPathTraversalProtection(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalUserConfigDir := userConfigDirFunc
+	defer func() {
+		userConfigDirFunc = originalUserConfigDir
+		resetConfigDirCache()
+	}()
+
+	resetConfigDirCache()
+	userConfigDirFunc = func() (string, error) {
+		return tmpDir, nil
+	}
+
+	// Test IssuePath with path traversal attempts
+	maliciousIDs := []string{
+		"../../../etc/passwd",
+		"..\\..\\..\\windows\\system32",
+		"../../../../root",
+		"/absolute/path",
+	}
+
+	for _, maliciousID := range maliciousIDs {
+		_, err := IssuePath("TEST-PROJ", maliciousID)
+		if err == nil {
+			t.Errorf("IssuePath should reject path traversal attempt: %s", maliciousID)
+		}
+	}
+
+	// Test EpicPath with path traversal attempts
+	for _, maliciousID := range maliciousIDs {
+		_, err := EpicPath("TEST-PROJ", maliciousID)
+		if err == nil {
+			t.Errorf("EpicPath should reject path traversal attempt: %s", maliciousID)
+		}
+	}
+
+	// Test that valid IDs still work
+	validPath, err := IssuePath("TEST-PROJ", "T-123")
+	if err != nil {
+		t.Fatalf("IssuePath should accept valid ID: %v", err)
+	}
+	if !strings.Contains(validPath, "T-123.json") {
+		t.Errorf("IssuePath should return valid path for valid ID, got: %s", validPath)
 	}
 }

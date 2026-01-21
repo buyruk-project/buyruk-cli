@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 )
 
 var (
@@ -11,24 +13,39 @@ var (
 	// It's safe to cache this as it's read-only after initialization
 	cachedConfigDir string
 
+	// configDirOnce ensures thread-safe initialization of cachedConfigDir
+	// Using a pointer allows resetting in tests
+	configDirOnce = &sync.Once{}
+
 	// userConfigDirFunc is a variable that holds the function to get user config directory.
 	// This allows us to swap it in tests. Defaults to os.UserConfigDir.
 	userConfigDirFunc = os.UserConfigDir
 )
 
+// resetConfigDirCache resets the config directory cache and sync.Once.
+// This is only used for testing purposes.
+func resetConfigDirCache() {
+	cachedConfigDir = ""
+	configDirOnce = &sync.Once{}
+}
+
 // ConfigDir returns the base config directory using os.UserConfigDir().
-// The result is cached after the first call.
+// The result is cached after the first call in a thread-safe manner.
 func ConfigDir() (string, error) {
-	if cachedConfigDir != "" {
-		return cachedConfigDir, nil
+	var initErr error
+	configDirOnce.Do(func() {
+		baseDir, err := userConfigDirFunc()
+		if err != nil {
+			initErr = fmt.Errorf("storage: failed to get user config dir: %w", err)
+			return
+		}
+		cachedConfigDir = filepath.Join(baseDir, "buyruk")
+	})
+
+	if initErr != nil {
+		return "", initErr
 	}
 
-	baseDir, err := userConfigDirFunc()
-	if err != nil {
-		return "", fmt.Errorf("storage: failed to get user config dir: %w", err)
-	}
-
-	cachedConfigDir = filepath.Join(baseDir, "buyruk")
 	return cachedConfigDir, nil
 }
 
@@ -83,7 +100,27 @@ func IssuePath(projectKey, issueID string) (string, error) {
 
 	// Clean the issue ID to prevent path traversal
 	cleanID := filepath.Clean(issueID)
-	return filepath.Join(issuesDir, cleanID+".json"), nil
+
+	// Validate that the cleaned ID doesn't contain path separators (prevents traversal)
+	if cleanID != issueID || filepath.IsAbs(cleanID) {
+		return "", fmt.Errorf("storage: invalid issue ID: contains path separators or is absolute")
+	}
+
+	// Build the full path and validate it's within the issues directory
+	fullPath := filepath.Join(issuesDir, cleanID+".json")
+
+	// Use filepath.Rel to ensure the path is within the issues directory
+	relPath, err := filepath.Rel(issuesDir, fullPath)
+	if err != nil {
+		return "", fmt.Errorf("storage: failed to validate issue path: %w", err)
+	}
+
+	// Check if the relative path tries to escape the directory
+	if strings.HasPrefix(relPath, "..") {
+		return "", fmt.Errorf("storage: invalid issue ID: path traversal detected")
+	}
+
+	return fullPath, nil
 }
 
 // EpicPath returns the individual epic file path for the given project key and epic ID.
@@ -95,7 +132,27 @@ func EpicPath(projectKey, epicID string) (string, error) {
 
 	// Clean the epic ID to prevent path traversal
 	cleanID := filepath.Clean(epicID)
-	return filepath.Join(epicsDir, cleanID+".json"), nil
+
+	// Validate that the cleaned ID doesn't contain path separators (prevents traversal)
+	if cleanID != epicID || filepath.IsAbs(cleanID) {
+		return "", fmt.Errorf("storage: invalid epic ID: contains path separators or is absolute")
+	}
+
+	// Build the full path and validate it's within the epics directory
+	fullPath := filepath.Join(epicsDir, cleanID+".json")
+
+	// Use filepath.Rel to ensure the path is within the epics directory
+	relPath, err := filepath.Rel(epicsDir, fullPath)
+	if err != nil {
+		return "", fmt.Errorf("storage: failed to validate epic path: %w", err)
+	}
+
+	// Check if the relative path tries to escape the directory
+	if strings.HasPrefix(relPath, "..") {
+		return "", fmt.Errorf("storage: invalid epic ID: path traversal detected")
+	}
+
+	return fullPath, nil
 }
 
 // ConfigFilePath returns the config.json path.
