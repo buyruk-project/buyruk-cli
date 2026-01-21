@@ -481,7 +481,7 @@ func TestCheckPendingTransaction(t *testing.T) {
 	BeginTransaction(projectKey, "test", metadata)
 
 	// Check when transaction exists
-	exists, retrievedMetadata, err := CheckPendingTransaction(projectKey)
+	exists, retrievedTransaction, err := CheckPendingTransaction(projectKey)
 	if err != nil {
 		t.Fatalf("CheckPendingTransaction() failed: %v", err)
 	}
@@ -489,8 +489,11 @@ func TestCheckPendingTransaction(t *testing.T) {
 		t.Fatal("CheckPendingTransaction() should return true when transaction exists")
 	}
 
-	if retrievedMetadata["test"] != "value" {
-		t.Errorf("CheckPendingTransaction() metadata = %v, want map[test:value]", retrievedMetadata)
+	if retrievedTransaction.Metadata["test"] != "value" {
+		t.Errorf("CheckPendingTransaction() metadata = %v, want map[test:value]", retrievedTransaction.Metadata)
+	}
+	if retrievedTransaction.Operation != "test" {
+		t.Errorf("CheckPendingTransaction() operation = %s, want test", retrievedTransaction.Operation)
 	}
 }
 
