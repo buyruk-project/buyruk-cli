@@ -1,8 +1,7 @@
 ---
 description: Visual and UX standards for the buyruk CLI
-globs: **/*.go
+alwaysApply: false
 ---
-
 # CLI UX & Rendering Rules
 
 ## Visuals

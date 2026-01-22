@@ -1,8 +1,7 @@
 ---
 description: Best practices for Go error handling and wrapping
-globs: **/*.go
+alwaysApply: false
 ---
-
 # Go Error Handling Standards
 
 ## 1. Wrapping vs. Returning

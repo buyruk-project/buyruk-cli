@@ -1,8 +1,7 @@
 ---
 description: Project structure and architecture patterns following GitHub CLI
-globs: **/*.go
+alwaysApply: false
 ---
-
 # Project Structure & Architecture
 
 ## Directory Organization (GitHub CLI Pattern)

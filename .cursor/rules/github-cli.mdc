@@ -1,8 +1,7 @@
 ---
 description: GitHub CLI (gh) commands for PR management and review workflows
-globs: **/*
+alwaysApply: false
 ---
-
 # GitHub CLI Commands
 
 When working with PRs, reviews, and comments, use the GitHub CLI (`gh`) tool for efficient interaction with GitHub.
