@@ -65,7 +65,7 @@ func NewProjectRepairCmd() *cobra.Command {
 func createProject(projectKey string, cmd *cobra.Command) error {
 	// Validate project key format
 	if !isValidProjectKey(projectKey) {
-		return fmt.Errorf("cli: invalid project key %q (must be uppercase alphanumeric)", projectKey)
+		return fmt.Errorf("cli: invalid project key %q (must contain only uppercase letters, numbers, and hyphens)", projectKey)
 	}
 
 	// Check if project already exists
