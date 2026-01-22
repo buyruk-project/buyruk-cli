@@ -206,6 +206,11 @@ func NewEpicViewCmd() *cobra.Command {
 
 // viewEpic views a single epic by ID.
 func viewEpic(epicID string, cmd *cobra.Command) error {
+	// Validate epic ID format
+	if err := validateEpicID(epicID); err != nil {
+		return fmt.Errorf("cli: invalid epic ID format: %w", err)
+	}
+
 	// Resolve project
 	projectKey, err := config.ResolveProject(cmd)
 	if err != nil {
@@ -262,6 +267,11 @@ func NewEpicUpdateCmd() *cobra.Command {
 
 // updateEpic updates an existing epic.
 func updateEpic(epicID string, cmd *cobra.Command) error {
+	// Validate epic ID format
+	if err := validateEpicID(epicID); err != nil {
+		return fmt.Errorf("cli: invalid epic ID format: %w", err)
+	}
+
 	// Resolve project
 	projectKey, err := config.ResolveProject(cmd)
 	if err != nil {
@@ -440,6 +450,11 @@ func NewEpicDeleteCmd() *cobra.Command {
 
 // deleteEpic deletes an epic from the project.
 func deleteEpic(epicID string, cmd *cobra.Command) error {
+	// Validate epic ID format
+	if err := validateEpicID(epicID); err != nil {
+		return fmt.Errorf("cli: invalid epic ID format: %w", err)
+	}
+
 	// Resolve project
 	projectKey, err := config.ResolveProject(cmd)
 	if err != nil {

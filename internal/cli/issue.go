@@ -553,17 +553,17 @@ func deleteIssue(issueID string, cmd *cobra.Command) error {
 		return fmt.Errorf("cli: failed to stat issue path %q: %w", issuePath, err)
 	}
 
-	// Check for issues that depend on this issue
+	// Check for issues that depend on this issue (pre-lock read for warnings only)
 	indexPath, err := storage.ProjectIndexPath(projectKey)
 	if err != nil {
 		return fmt.Errorf("cli: failed to resolve index path: %w", err)
 	}
 
-	var index models.ProjectIndex
-	if err := storage.ReadJSON(indexPath, &index); err == nil {
+	var preLockIndex models.ProjectIndex
+	if err := storage.ReadJSON(indexPath, &preLockIndex); err == nil {
 		// Check if any issues depend on this issue
 		dependentIssues := []string{}
-		for _, entry := range index.Issues {
+		for _, entry := range preLockIndex.Issues {
 			// Load issue to check dependencies
 			depIssuePath, err := storage.IssuePath(projectKey, entry.ID)
 			if err != nil {
@@ -634,13 +634,17 @@ func deleteIssue(issueID string, cmd *cobra.Command) error {
 	}
 
 	// Update project index (remove issue from index)
-	if err := storage.ReadJSON(indexPath, &index); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("cli: failed to read project index: %w", err)
-	}
-	// Initialize index if it doesn't exist
-	if index.ProjectKey == "" {
-		index.ProjectKey = projectKey
-		index.Issues = []models.IndexEntry{}
+	// Use a fresh index variable to avoid stale data from pre-lock read
+	var index models.ProjectIndex
+	if err := storage.ReadJSON(indexPath, &index); err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("cli: failed to read project index: %w", err)
+		}
+		// Index doesn't exist, initialize empty index
+		index = models.ProjectIndex{
+			ProjectKey: projectKey,
+			Issues:     []models.IndexEntry{},
+		}
 	}
 	index.RemoveIssue(issueID)
 	index.UpdatedAt = time.Now().Format(time.RFC3339)
