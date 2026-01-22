@@ -11,7 +11,16 @@ When I ask you to "ship this" or "prepare a PR," follow these exact steps using 
 - **Naming Convention**: `type/short-description` (e.g., `feat/add-lson-formatter` or `fix/windows-path-bug`).
 - **Command**: `git checkout -b <branch-name>`.
 
-## 2. Atomic Commits
+## 2. Pre-Commit Checks (MANDATORY)
+- **ALWAYS run these three commands before ANY commit or push:**
+  1. `gofmt -s -w .` - Format all code
+  2. `go vet ./...` - Run static analysis
+  3. `go test ./...` - Run all tests
+- **NEVER skip these checks** - CI will fail if code is not formatted or tests fail
+- **NEVER commit without running all three** - This is non-negotiable
+- If any check fails, fix the issues before committing
+
+## 3. Atomic Commits
 - **Strategy**: Break changes into logical units. Do not commit everything at once.
 - **Message Format**: Use **Conventional Commits**.
   - `feat(scope): ...`, `fix(scope): ...`, `docs: ...`
@@ -19,7 +28,7 @@ When I ask you to "ship this" or "prepare a PR," follow these exact steps using 
   - If a change touches storage logic AND a CLI flag, make TWO commits.
   - `git add <specific-files>` followed by `git commit -m "..."`.
 
-## 3. Pushing & Draft PR
+## 4. Pushing & Draft PR
 - **Push**: `git push -u origin <branch-name>`.
 - **Draft PR**: Use `gh pr create --draft`.
 - **PR Title**: A clean, capitalized version of the branch purpose.
@@ -35,12 +44,15 @@ When I ask you to "ship this" or "prepare a PR," follow these exact steps using 
   - Add `build-artifacts` label to PR (can be added anytime, even after PR creation - auto-triggers workflow)
   - Use GitHub Actions UI → "Run workflow" → check "Upload build artifacts" (manual trigger)
 
-## 4. Automation Example
+## 5. Automation Example
 If I say "Create a PR for the new login feature," you should run:
 1. `git checkout -b feat/login-system`
-2. `git add internal/auth/... && git commit -m "feat(auth): implement oauth2 core"`
-3. `git add cmd/... && git commit -m "feat(cli): add login command"`
-4. `git push -u origin feat/login-system`
-5. Create `pr_body.md` with the PR description
-6. `gh pr create --draft --title "Implement OAuth2 Login System" --body-file pr_body.md`
-7. Delete `pr_body.md` after PR creation
+2. **MANDATORY**: Run `gofmt -s -w . && go vet ./... && go test ./...`
+3. `git add internal/auth/... && git commit -m "feat(auth): implement oauth2 core"`
+4. **MANDATORY**: Run `gofmt -s -w . && go vet ./... && go test ./...` again before next commit
+5. `git add cmd/... && git commit -m "feat(cli): add login command"`
+6. **MANDATORY**: Run `gofmt -s -w . && go vet ./... && go test ./...` before push
+7. `git push -u origin feat/login-system`
+8. Create `pr_body.md` with the PR description
+9. `gh pr create --draft --title "Implement OAuth2 Login System" --body-file pr_body.md`
+10. Delete `pr_body.md` after PR creation

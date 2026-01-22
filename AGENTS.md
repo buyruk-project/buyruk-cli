@@ -121,10 +121,14 @@ Following the GitHub CLI (`gh`) architecture pattern:
 - **Repair**: If `project.json` (index) is out of sync with `issues/`, use the repair logic.
 
 ## 🧪 Local Development & CI
+- **MANDATORY Pre-Commit Checks**: **ALWAYS** run these three commands before ANY commit or push:
+  1. **Format**: `gofmt -s -w .` (format all code)
+  2. **Vet**: `go vet ./...` (static analysis)
+  3. **Test**: `go test ./...` (run all tests)
+  - **NEVER skip these checks** - CI will fail if code is not formatted
+  - **NEVER commit without running all three** - This is non-negotiable
 - **Local First**: All lint and test issues MUST be caught locally before pushing.
-  - Run `go vet ./...` to catch static analysis issues
-  - Run `gofmt -s -w .` to format code (or check with `gofmt -s -l .`)
-  - Run `go test -race ./...` to catch concurrency issues
+  - Run `go test -race ./...` to catch concurrency issues (recommended before PR)
   - Run `go mod verify` to verify dependencies
 - **CI Purpose**: CI runs the same checks on multiple OSes (Ubuntu, Windows, macOS) for additional validation. CI should be green if local checks pass.
 - **Build Artifacts**: 
@@ -143,6 +147,11 @@ Following the GitHub CLI (`gh`) architecture pattern:
 
 ## 📝 Rules of Engagement
 - **Always Do**: 
+  - **MANDATORY: Before EVERY commit/push, run:**
+    1. `gofmt -s -w .` (format code)
+    2. `go vet ./...` (static analysis)
+    3. `go test ./...` (run tests)
+    - **This is non-negotiable** - CI will fail if skipped
   - Use early returns. Wrap errors with `fmt.Errorf("context: %w", err)`.
   - Use `cmd.OutOrStdout()` and `cmd.ErrOrStderr()` in Cobra commands (not `os.Stdout`/`os.Stderr`) for testability.
   - Write tests for all new commands and packages.
