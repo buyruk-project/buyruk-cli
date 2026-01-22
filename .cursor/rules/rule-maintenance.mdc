@@ -1,8 +1,6 @@
 ---
-description: Guidelines for maintaining and updating cursor rules based on code changes
-globs: **/*
+alwaysApply: true
 ---
-
 # Rule Maintenance & Evolution
 
 ## Post-Implementation Rule Review
