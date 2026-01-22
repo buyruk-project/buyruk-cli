@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -273,8 +274,36 @@ func deleteProject(projectKey string, cmd *cobra.Command) error {
 	}
 
 	// Check if project exists
-	if _, err := os.Stat(projectDir); os.IsNotExist(err) {
-		return fmt.Errorf("cli: project %q does not exist", projectKey)
+	if _, err := os.Stat(projectDir); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("cli: project %q does not exist", projectKey)
+		}
+		return fmt.Errorf("cli: failed to access project directory %q: %w", projectDir, err)
+	}
+
+	// Check for active lock or pending transaction
+	hasLock, err := storage.CheckLock(projectKey)
+	if err != nil {
+		return fmt.Errorf("cli: failed to check project lock: %w", err)
+	}
+	if hasLock {
+		yes, _ := cmd.Flags().GetBool("yes")
+		if !yes {
+			return fmt.Errorf("cli: project %q has an active lock (another operation may be in progress). Use -y to force deletion", projectKey)
+		}
+		errOut := cmd.ErrOrStderr()
+		fmt.Fprintf(errOut, "Warning: project %q has an active lock. Proceeding with deletion anyway.\n", projectKey)
+	}
+
+	// Check for pending transaction
+	pendingPath := filepath.Join(projectDir, ".buyruk_pending")
+	if _, err := os.Stat(pendingPath); err == nil {
+		yes, _ := cmd.Flags().GetBool("yes")
+		if !yes {
+			return fmt.Errorf("cli: project %q has a pending transaction (may indicate a crash). Use -y to force deletion", projectKey)
+		}
+		errOut := cmd.ErrOrStderr()
+		fmt.Fprintf(errOut, "Warning: project %q has a pending transaction. Proceeding with deletion anyway.\n", projectKey)
 	}
 
 	// Count issues and epics for warning
@@ -307,8 +336,11 @@ func deleteProject(projectKey string, cmd *cobra.Command) error {
 		fmt.Fprintf(errOut, "Warning: This will delete project %q and all its data (%d issues, %d epics).\n", projectKey, issueCount, epicCount)
 		fmt.Fprintf(errOut, "Are you sure you want to delete project %q? (yes/no): ", projectKey)
 
-		var response string
-		fmt.Scanln(&response)
+		scanner := bufio.NewScanner(cmd.InOrStdin())
+		if !scanner.Scan() {
+			return fmt.Errorf("cli: failed to read confirmation: %w", scanner.Err())
+		}
+		response := strings.TrimSpace(strings.ToLower(scanner.Text()))
 		if response != "yes" && response != "y" {
 			return fmt.Errorf("cli: deletion cancelled")
 		}

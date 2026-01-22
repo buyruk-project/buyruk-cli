@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -65,8 +66,11 @@ func createEpic(cmd *cobra.Command) error {
 		return fmt.Errorf("cli: failed to resolve project directory: %w", err)
 	}
 
-	if _, err := os.Stat(projectDir); os.IsNotExist(err) {
-		return fmt.Errorf("cli: project %q does not exist", projectKey)
+	if _, err := os.Stat(projectDir); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("cli: project %q does not exist", projectKey)
+		}
+		return fmt.Errorf("cli: failed to access project directory: %w", err)
 	}
 
 	// Get title (required)
@@ -479,16 +483,19 @@ func deleteEpic(epicID string, cmd *cobra.Command) error {
 		errOut := cmd.ErrOrStderr()
 		fmt.Fprintf(errOut, "Are you sure you want to delete epic %q? (yes/no): ", epicID)
 
-		var response string
-		fmt.Scanln(&response)
+		scanner := bufio.NewScanner(cmd.InOrStdin())
+		if !scanner.Scan() {
+			return fmt.Errorf("cli: failed to read confirmation: %w", scanner.Err())
+		}
+		response := strings.TrimSpace(strings.ToLower(scanner.Text()))
 		if response != "yes" && response != "y" {
 			return fmt.Errorf("cli: deletion cancelled")
 		}
 	}
 
-	// Delete epic file
-	if err := os.Remove(epicPath); err != nil {
-		return fmt.Errorf("cli: failed to delete epic file: %w", err)
+	// Delete epic file atomically (with lock and transaction)
+	if err := storage.DeleteAtomic(epicPath); err != nil {
+		return fmt.Errorf("cli: failed to delete epic: %w", err)
 	}
 
 	// Success message

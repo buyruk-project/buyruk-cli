@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -581,15 +582,18 @@ func deleteIssue(issueID string, cmd *cobra.Command) error {
 		errOut := cmd.ErrOrStderr()
 		fmt.Fprintf(errOut, "Are you sure you want to delete issue %q? (yes/no): ", issueID)
 
-		var response string
-		fmt.Scanln(&response)
+		scanner := bufio.NewScanner(cmd.InOrStdin())
+		if !scanner.Scan() {
+			return fmt.Errorf("cli: failed to read confirmation: %w", scanner.Err())
+		}
+		response := strings.TrimSpace(strings.ToLower(scanner.Text()))
 		if response != "yes" && response != "y" {
 			return fmt.Errorf("cli: deletion cancelled")
 		}
 	}
 
-	// Delete issue file
-	if err := os.Remove(issuePath); err != nil {
+	// Delete issue file atomically (with lock and transaction)
+	if err := storage.DeleteAtomic(issuePath); err != nil {
 		return fmt.Errorf("cli: failed to delete issue file: %w", err)
 	}
 
