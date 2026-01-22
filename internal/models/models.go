@@ -67,6 +67,11 @@ func (i *Issue) AddPR(url string) {
 	}
 }
 
+// RemovePR removes a PR URL from the issue
+func (i *Issue) RemovePR(url string) {
+	i.PRs = remove(i.PRs, url)
+}
+
 // Epic represents an epic that groups multiple issues
 type Epic struct {
 	ID          string `json:"id"`                    // Required: e.g., "E-1"

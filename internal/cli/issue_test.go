@@ -1106,6 +1106,200 @@ func TestLinkIssue_InvalidID(t *testing.T) {
 	}
 }
 
+func TestNewIssuePRCmd(t *testing.T) {
+	cmd := NewIssuePRCmd()
+	if cmd == nil {
+		t.Fatal("NewIssuePRCmd() returned nil")
+	}
+	if !strings.HasPrefix(cmd.Use, "pr") {
+		t.Errorf("Expected Use to start with 'pr', got '%s'", cmd.Use)
+	}
+}
+
+func TestManageIssuePR_AddPR(t *testing.T) {
+	// Use unique project key to avoid conflicts
+	projectKey := sanitizeTestName("TEST" + t.Name())
+	// Clean up after test
+	defer func() {
+		projectDir, _ := storage.ProjectDir(projectKey)
+		os.RemoveAll(projectDir)
+	}()
+
+	// Create project first
+	rootCmd := NewRootCmd()
+	rootCmd.SetArgs([]string{"project", "create", projectKey})
+	rootCmd.SetOut(new(bytes.Buffer))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	// Create an issue
+	issueID := projectKey + "-1"
+	rootCmd2 := NewRootCmd()
+	rootCmd2.SetArgs([]string{"issue", "create", "--project", projectKey, "--title", "Test Issue"})
+	rootCmd2.SetOut(new(bytes.Buffer))
+	if err := rootCmd2.Execute(); err != nil {
+		t.Fatalf("Failed to create issue: %v", err)
+	}
+
+	// Add PR
+	prURL := "https://github.com/user/repo/pull/123"
+	rootCmd3 := NewRootCmd()
+	rootCmd3.SetArgs([]string{"issue", "pr", issueID, prURL})
+
+	buf := new(bytes.Buffer)
+	errBuf := new(bytes.Buffer)
+	rootCmd3.SetOut(buf)
+	rootCmd3.SetErr(errBuf)
+
+	err := rootCmd3.Execute()
+	if err != nil {
+		t.Fatalf("issue pr command failed: %v\nStderr: %s", err, errBuf.String())
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "Added PR") {
+		t.Errorf("Expected output to contain 'Added PR', got: %s", output)
+	}
+
+	// Verify PR was added
+	issuePath, err := storage.IssuePath(projectKey, issueID)
+	if err != nil {
+		t.Fatalf("Failed to resolve issue path: %v", err)
+	}
+
+	var issue models.Issue
+	if err := storage.ReadJSON(issuePath, &issue); err != nil {
+		t.Fatalf("Failed to read issue: %v", err)
+	}
+
+	if !contains(issue.PRs, prURL) {
+		t.Errorf("Issue PRs should contain %q, got: %v", prURL, issue.PRs)
+	}
+}
+
+func TestManageIssuePR_RemovePR(t *testing.T) {
+	// Use unique project key to avoid conflicts
+	projectKey := sanitizeTestName("TEST" + t.Name())
+	// Clean up after test
+	defer func() {
+		projectDir, _ := storage.ProjectDir(projectKey)
+		os.RemoveAll(projectDir)
+	}()
+
+	// Create project first
+	rootCmd := NewRootCmd()
+	rootCmd.SetArgs([]string{"project", "create", projectKey})
+	rootCmd.SetOut(new(bytes.Buffer))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	// Create an issue
+	issueID := projectKey + "-1"
+	rootCmd2 := NewRootCmd()
+	rootCmd2.SetArgs([]string{"issue", "create", "--project", projectKey, "--title", "Test Issue"})
+	rootCmd2.SetOut(new(bytes.Buffer))
+	if err := rootCmd2.Execute(); err != nil {
+		t.Fatalf("Failed to create issue: %v", err)
+	}
+
+	// Add PR first
+	prURL := "https://github.com/user/repo/pull/123"
+	rootCmd3 := NewRootCmd()
+	rootCmd3.SetArgs([]string{"issue", "pr", issueID, prURL})
+	rootCmd3.SetOut(new(bytes.Buffer))
+	if err := rootCmd3.Execute(); err != nil {
+		t.Fatalf("Failed to add PR: %v", err)
+	}
+
+	// Remove PR
+	rootCmd4 := NewRootCmd()
+	rootCmd4.SetArgs([]string{"issue", "pr", issueID, prURL, "--remove"})
+
+	buf := new(bytes.Buffer)
+	errBuf := new(bytes.Buffer)
+	rootCmd4.SetOut(buf)
+	rootCmd4.SetErr(errBuf)
+
+	err := rootCmd4.Execute()
+	if err != nil {
+		t.Fatalf("issue pr --remove command failed: %v\nStderr: %s", err, errBuf.String())
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "Removed PR") {
+		t.Errorf("Expected output to contain 'Removed PR', got: %s", output)
+	}
+
+	// Verify PR was removed
+	issuePath, err := storage.IssuePath(projectKey, issueID)
+	if err != nil {
+		t.Fatalf("Failed to resolve issue path: %v", err)
+	}
+
+	var issue models.Issue
+	if err := storage.ReadJSON(issuePath, &issue); err != nil {
+		t.Fatalf("Failed to read issue: %v", err)
+	}
+
+	if contains(issue.PRs, prURL) {
+		t.Errorf("Issue PRs should not contain %q, got: %v", prURL, issue.PRs)
+	}
+}
+
+func TestManageIssuePR_NotFound(t *testing.T) {
+	// Use unique project key to avoid conflicts
+	projectKey := sanitizeTestName("TEST" + t.Name())
+	// Clean up after test
+	defer func() {
+		projectDir, _ := storage.ProjectDir(projectKey)
+		os.RemoveAll(projectDir)
+	}()
+
+	// Create project first
+	rootCmd := NewRootCmd()
+	rootCmd.SetArgs([]string{"project", "create", projectKey})
+	rootCmd.SetOut(new(bytes.Buffer))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	// Try to add PR to non-existent issue
+	issueID := projectKey + "-999"
+	rootCmd2 := NewRootCmd()
+	rootCmd2.SetArgs([]string{"issue", "pr", issueID, "https://github.com/user/repo/pull/123"})
+
+	errBuf := new(bytes.Buffer)
+	rootCmd2.SetErr(errBuf)
+
+	err := rootCmd2.Execute()
+	if err == nil {
+		t.Fatal("issue pr should fail for non-existent issue")
+	}
+
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Expected error about issue not found, got: %v", err)
+	}
+}
+
+func TestManageIssuePR_InvalidID(t *testing.T) {
+	rootCmd := NewRootCmd()
+	rootCmd.SetArgs([]string{"issue", "pr", "INVALID-ID", "https://github.com/user/repo/pull/123"})
+
+	errBuf := new(bytes.Buffer)
+	rootCmd.SetErr(errBuf)
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("issue pr should fail with invalid ID")
+	}
+
+	if !strings.Contains(err.Error(), "invalid issue ID") {
+		t.Errorf("Expected error about invalid ID, got: %v", err)
+	}
+}
+
 // Helper function to check if slice contains string
 func contains(slice []string, item string) bool {
 	for _, s := range slice {

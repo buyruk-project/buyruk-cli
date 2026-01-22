@@ -14,8 +14,8 @@ import (
 func NewViewCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "view <id>",
-		Short: "View task details",
-		Long:  "View detailed information about a task or issue",
+		Short: "View issue details",
+		Long:  "View detailed information about an issue",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			issueID := args[0]

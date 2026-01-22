@@ -203,8 +203,8 @@ func getNextIssueSequence(projectKey string) (int, error) {
 func NewIssueUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <id>",
-		Short: "Update a task",
-		Long:  "Update fields of an existing task",
+		Short: "Update an issue",
+		Long:  "Update fields of an existing issue",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			issueID := args[0]
@@ -268,6 +268,14 @@ func updateIssue(issueID string, cmd *cobra.Command) error {
 		}
 
 		if epicID, _ := cmd.Flags().GetString("epic"); epicID != "" {
+			// Validate epic exists before setting
+			epicPath, err := storage.EpicPath(projectKey, epicID)
+			if err != nil {
+				return fmt.Errorf("cli: failed to resolve epic path: %w", err)
+			}
+			if _, err := os.Stat(epicPath); os.IsNotExist(err) {
+				return fmt.Errorf("cli: epic %q not found", epicID)
+			}
 			iss.EpicID = epicID
 		}
 
@@ -313,8 +321,8 @@ func updateIssue(issueID string, cmd *cobra.Command) error {
 func NewIssueLinkCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "link <id> <dependency-id>",
-		Short: "Link tasks with dependencies",
-		Long:  "Add a dependency relationship (task is blocked by dependency)",
+		Short: "Link issues with dependencies",
+		Long:  "Add a dependency relationship (issue is blocked by dependency)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			issueID := args[0]
@@ -443,7 +451,7 @@ func manageIssuePR(issueID, prURL string, cmd *cobra.Command) error {
 
 		// Add or remove PR
 		if remove {
-			iss.PRs = removePR(iss.PRs, prURL)
+			iss.RemovePR(prURL)
 		} else {
 			iss.AddPR(prURL)
 		}
@@ -468,15 +476,4 @@ func manageIssuePR(issueID, prURL string, cmd *cobra.Command) error {
 	}
 
 	return nil
-}
-
-// removePR removes a PR URL from a slice
-func removePR(slice []string, item string) []string {
-	result := []string{}
-	for _, s := range slice {
-		if s != item {
-			result = append(result, s)
-		}
-	}
-	return result
 }
