@@ -281,29 +281,32 @@ func deleteProject(projectKey string, cmd *cobra.Command) error {
 		return fmt.Errorf("cli: failed to access project directory %q: %w", projectDir, err)
 	}
 
-	// Check for active lock or pending transaction
-	hasLock, err := storage.CheckLock(projectKey)
+	// Check for pending transaction before acquiring lock
+	hasPending, _, err := storage.CheckPendingTransaction(projectKey)
 	if err != nil {
-		return fmt.Errorf("cli: failed to check project lock: %w", err)
+		return fmt.Errorf("cli: failed to check pending transaction: %w", err)
 	}
-	if hasLock {
-		yes, _ := cmd.Flags().GetBool("yes")
-		if !yes {
-			return fmt.Errorf("cli: project %q has an active lock (another operation may be in progress). Use -y to force deletion", projectKey)
-		}
-		errOut := cmd.ErrOrStderr()
-		fmt.Fprintf(errOut, "Warning: project %q has an active lock. Proceeding with deletion anyway.\n", projectKey)
-	}
-
-	// Check for pending transaction
-	pendingPath := filepath.Join(projectDir, ".buyruk_pending")
-	if _, err := os.Stat(pendingPath); err == nil {
+	if hasPending {
 		yes, _ := cmd.Flags().GetBool("yes")
 		if !yes {
 			return fmt.Errorf("cli: project %q has a pending transaction (may indicate a crash). Use -y to force deletion", projectKey)
 		}
 		errOut := cmd.ErrOrStderr()
 		fmt.Fprintf(errOut, "Warning: project %q has a pending transaction. Proceeding with deletion anyway.\n", projectKey)
+	}
+
+	// Acquire project lock to prevent concurrent modifications during deletion
+	// This ensures no other operations are running while we delete
+	cleanup, err := storage.AcquireLock(projectKey)
+	if err != nil {
+		yes, _ := cmd.Flags().GetBool("yes")
+		if !yes {
+			return fmt.Errorf("cli: failed to acquire project lock for %q (another operation may be in progress). Use -y to force deletion: %w", projectKey, err)
+		}
+		errOut := cmd.ErrOrStderr()
+		fmt.Fprintf(errOut, "Warning: failed to acquire lock for project %q. Proceeding with deletion anyway.\n", projectKey)
+	} else {
+		defer cleanup()
 	}
 
 	// Count issues and epics for warning
@@ -346,10 +349,32 @@ func deleteProject(projectKey string, cmd *cobra.Command) error {
 		}
 	}
 
+	// Begin transaction for project deletion
+	if err := storage.BeginTransaction(projectKey, "delete_project", map[string]interface{}{
+		"project_key": projectKey,
+	}); err != nil {
+		return fmt.Errorf("cli: failed to begin deletion transaction: %w", err)
+	}
+
+	success := false
+	defer func() {
+		if !success {
+			storage.RollbackTransaction(projectKey)
+		}
+	}()
+
 	// Delete project directory (removes all files including issues, epics, index, etc.)
+	// Note: We're deleting the entire directory, so the lock file and transaction log
+	// will also be removed. This is safe because we hold the lock.
 	if err := os.RemoveAll(projectDir); err != nil {
 		return fmt.Errorf("cli: failed to delete project directory: %w", err)
 	}
+
+	// Commit transaction (though the directory is already deleted, this cleans up
+	// any remaining transaction state if the deletion was partial)
+	// Since the directory is gone, this may fail, but that's okay
+	_ = storage.CommitTransaction(projectKey)
+	success = true
 
 	// Success message
 	out := cmd.OutOrStdout()
