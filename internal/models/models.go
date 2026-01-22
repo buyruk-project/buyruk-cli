@@ -22,25 +22,29 @@ type Issue struct {
 }
 
 // Validate validates the Issue struct
+// ID, Type, and Status are optional (can be auto-generated/defaulted during creation)
+// Only Title is required
 func (i *Issue) Validate() error {
-	if i.ID == "" {
-		return fmt.Errorf("models: issue ID is required")
-	}
-	if i.Type == "" {
-		return fmt.Errorf("models: issue type is required")
-	}
-	if !IsValidType(i.Type) {
-		return fmt.Errorf("models: invalid type %q", i.Type)
-	}
+	// Title is the only required field
 	if i.Title == "" {
 		return fmt.Errorf("models: issue title is required")
 	}
-	if !IsValidStatus(i.Status) {
+
+	// Validate Type if provided
+	if i.Type != "" && !IsValidType(i.Type) {
+		return fmt.Errorf("models: invalid type %q", i.Type)
+	}
+
+	// Validate Status if provided
+	if i.Status != "" && !IsValidStatus(i.Status) {
 		return fmt.Errorf("models: invalid status %q", i.Status)
 	}
+
+	// Validate Priority if provided
 	if i.Priority != "" && !IsValidPriority(i.Priority) {
 		return fmt.Errorf("models: invalid priority %q", i.Priority)
 	}
+
 	return nil
 }
 
