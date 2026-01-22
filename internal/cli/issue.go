@@ -21,6 +21,9 @@ func NewIssueCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(NewIssueCreateCmd())
+	cmd.AddCommand(NewIssueUpdateCmd())
+	cmd.AddCommand(NewIssueLinkCmd())
+	cmd.AddCommand(NewIssuePRCmd())
 
 	return cmd
 }
@@ -194,4 +197,286 @@ func getNextIssueSequence(projectKey string) (int, error) {
 
 	// Return next sequence number
 	return maxSeq + 1, nil
+}
+
+// NewIssueUpdateCmd creates and returns the issue update command.
+func NewIssueUpdateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "update <id>",
+		Short: "Update a task",
+		Long:  "Update fields of an existing task",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			issueID := args[0]
+			return updateIssue(issueID, cmd)
+		},
+	}
+
+	cmd.Flags().String("title", "", "Update title")
+	cmd.Flags().String("status", "", "Update status")
+	cmd.Flags().String("priority", "", "Update priority")
+	cmd.Flags().String("description", "", "Update description")
+	cmd.Flags().String("epic", "", "Update epic link")
+
+	return cmd
+}
+
+// updateIssue updates an existing issue.
+func updateIssue(issueID string, cmd *cobra.Command) error {
+	// Parse issue ID
+	projectKey, _, err := models.ParseIssueID(issueID)
+	if err != nil {
+		return fmt.Errorf("cli: invalid issue ID %q: %w", issueID, err)
+	}
+
+	// Load issue atomically (read-modify-write)
+	issuePath, err := storage.IssuePath(projectKey, issueID)
+	if err != nil {
+		return fmt.Errorf("cli: failed to resolve issue path: %w", err)
+	}
+
+	var issue models.Issue
+	if err := storage.UpdateJSONAtomic(issuePath, &issue, func(v interface{}) error {
+		iss := v.(*models.Issue)
+
+		// Check if issue exists (ID should match if file existed)
+		if iss.ID == "" || iss.ID != issueID {
+			return fmt.Errorf("cli: issue %q not found", issueID)
+		}
+
+		// Update fields from flags
+		if title, _ := cmd.Flags().GetString("title"); title != "" {
+			iss.Title = title
+		}
+
+		if status, _ := cmd.Flags().GetString("status"); status != "" {
+			if !models.IsValidStatus(status) {
+				return fmt.Errorf("cli: invalid status %q", status)
+			}
+			iss.Status = status
+		}
+
+		if priority, _ := cmd.Flags().GetString("priority"); priority != "" {
+			if !models.IsValidPriority(priority) {
+				return fmt.Errorf("cli: invalid priority %q", priority)
+			}
+			iss.Priority = priority
+		}
+
+		if description, _ := cmd.Flags().GetString("description"); description != "" {
+			iss.Description = description
+		}
+
+		if epicID, _ := cmd.Flags().GetString("epic"); epicID != "" {
+			iss.EpicID = epicID
+		}
+
+		// Update timestamp
+		iss.UpdatedAt = time.Now().Format(time.RFC3339)
+
+		// Validate
+		if err := iss.Validate(); err != nil {
+			return fmt.Errorf("cli: invalid issue after update: %w", err)
+		}
+
+		return nil
+	}); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return fmt.Errorf("cli: issue %q not found", issueID)
+		}
+		return fmt.Errorf("cli: failed to update issue: %w", err)
+	}
+
+	// Update project index atomically
+	indexPath, err := storage.ProjectIndexPath(projectKey)
+	if err != nil {
+		return fmt.Errorf("cli: failed to resolve index path: %w", err)
+	}
+
+	if err := storage.UpdateJSONAtomic(indexPath, &models.ProjectIndex{}, func(v interface{}) error {
+		idx := v.(*models.ProjectIndex)
+		idx.AddIssue(&issue)
+		idx.UpdatedAt = time.Now().Format(time.RFC3339)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("cli: failed to update project index: %w", err)
+	}
+
+	// Success message
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "Updated %s\n", issueID)
+
+	return nil
+}
+
+// NewIssueLinkCmd creates and returns the issue link command.
+func NewIssueLinkCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "link <id> <dependency-id>",
+		Short: "Link tasks with dependencies",
+		Long:  "Add a dependency relationship (task is blocked by dependency)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			issueID := args[0]
+			dependencyID := args[1]
+			return linkIssue(issueID, dependencyID, cmd)
+		},
+	}
+
+	cmd.Flags().Bool("remove", false, "Remove dependency instead of adding")
+
+	return cmd
+}
+
+// linkIssue links an issue with a dependency.
+func linkIssue(issueID, dependencyID string, cmd *cobra.Command) error {
+	// Parse issue IDs
+	projectKey, _, err := models.ParseIssueID(issueID)
+	if err != nil {
+		return fmt.Errorf("cli: invalid issue ID %q: %w", issueID, err)
+	}
+
+	depProjectKey, _, err := models.ParseIssueID(dependencyID)
+	if err != nil {
+		return fmt.Errorf("cli: invalid dependency ID %q: %w", dependencyID, err)
+	}
+
+	// Validate dependency exists
+	depPath, err := storage.IssuePath(depProjectKey, dependencyID)
+	if err != nil {
+		return fmt.Errorf("cli: failed to resolve dependency path: %w", err)
+	}
+
+	if _, err := os.Stat(depPath); os.IsNotExist(err) {
+		return fmt.Errorf("cli: dependency %q not found", dependencyID)
+	}
+
+	// Load and update issue atomically
+	issuePath, err := storage.IssuePath(projectKey, issueID)
+	if err != nil {
+		return fmt.Errorf("cli: failed to resolve issue path: %w", err)
+	}
+
+	var issue models.Issue
+	remove, _ := cmd.Flags().GetBool("remove")
+
+	if err := storage.UpdateJSONAtomic(issuePath, &issue, func(v interface{}) error {
+		iss := v.(*models.Issue)
+
+		// Check if issue exists (ID should match if file existed)
+		if iss.ID == "" || iss.ID != issueID {
+			return fmt.Errorf("cli: issue %q not found", issueID)
+		}
+
+		// Add or remove dependency
+		if remove {
+			iss.RemoveDependency(dependencyID)
+		} else {
+			iss.AddDependency(dependencyID)
+		}
+
+		// Update timestamp
+		iss.UpdatedAt = time.Now().Format(time.RFC3339)
+
+		return nil
+	}); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return fmt.Errorf("cli: issue %q not found", issueID)
+		}
+		return fmt.Errorf("cli: failed to update issue: %w", err)
+	}
+
+	// Success message
+	out := cmd.OutOrStdout()
+	if remove {
+		fmt.Fprintf(out, "Removed dependency %s from %s\n", dependencyID, issueID)
+	} else {
+		fmt.Fprintf(out, "Linked %s -> %s (blocked by)\n", issueID, dependencyID)
+	}
+
+	return nil
+}
+
+// NewIssuePRCmd creates and returns the issue PR command.
+func NewIssuePRCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pr <id> <pr-url>",
+		Short: "Add or remove PR links",
+		Long:  "Add or remove pull request URLs from an issue",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			issueID := args[0]
+			prURL := args[1]
+			return manageIssuePR(issueID, prURL, cmd)
+		},
+	}
+
+	cmd.Flags().Bool("remove", false, "Remove PR instead of adding")
+
+	return cmd
+}
+
+// manageIssuePR adds or removes a PR URL from an issue.
+func manageIssuePR(issueID, prURL string, cmd *cobra.Command) error {
+	// Parse issue ID
+	projectKey, _, err := models.ParseIssueID(issueID)
+	if err != nil {
+		return fmt.Errorf("cli: invalid issue ID %q: %w", issueID, err)
+	}
+
+	// Load and update issue atomically
+	issuePath, err := storage.IssuePath(projectKey, issueID)
+	if err != nil {
+		return fmt.Errorf("cli: failed to resolve issue path: %w", err)
+	}
+
+	var issue models.Issue
+	remove, _ := cmd.Flags().GetBool("remove")
+
+	if err := storage.UpdateJSONAtomic(issuePath, &issue, func(v interface{}) error {
+		iss := v.(*models.Issue)
+
+		// Check if issue exists (ID should match if file existed)
+		if iss.ID == "" || iss.ID != issueID {
+			return fmt.Errorf("cli: issue %q not found", issueID)
+		}
+
+		// Add or remove PR
+		if remove {
+			iss.PRs = removePR(iss.PRs, prURL)
+		} else {
+			iss.AddPR(prURL)
+		}
+
+		// Update timestamp
+		iss.UpdatedAt = time.Now().Format(time.RFC3339)
+
+		return nil
+	}); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return fmt.Errorf("cli: issue %q not found", issueID)
+		}
+		return fmt.Errorf("cli: failed to update issue: %w", err)
+	}
+
+	// Success message
+	out := cmd.OutOrStdout()
+	if remove {
+		fmt.Fprintf(out, "Removed PR %s from %s\n", prURL, issueID)
+	} else {
+		fmt.Fprintf(out, "Added PR %s to %s\n", prURL, issueID)
+	}
+
+	return nil
+}
+
+// removePR removes a PR URL from a slice
+func removePR(slice []string, item string) []string {
+	result := []string{}
+	for _, s := range slice {
+		if s != item {
+			result = append(result, s)
+		}
+	}
+	return result
 }

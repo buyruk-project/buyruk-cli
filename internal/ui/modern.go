@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/buyruk-project/buyruk-cli/internal/models"
 	"github.com/olekukonko/tablewriter"
@@ -71,7 +72,12 @@ func (r *ModernRenderer) RenderIssue(issue *models.Issue, w io.Writer) error {
 	// Description
 	if issue.Description != "" {
 		fmt.Fprintf(w, "%s\n", styles.Label("Description"))
+		descStart := time.Now()
 		rendered, err := RenderMarkdown(issue.Description)
+		descDuration := time.Since(descStart)
+		if descDuration > 100*time.Millisecond {
+			debugLog(fmt.Sprintf("MODERN: Description rendering took %v", descDuration))
+		}
 		if err != nil {
 			return fmt.Errorf("ui: failed to render markdown: %w", err)
 		}
@@ -110,7 +116,12 @@ func (r *ModernRenderer) RenderEpic(epic *models.Epic, w io.Writer) error {
 	// Description
 	if epic.Description != "" {
 		fmt.Fprintf(w, "%s\n", styles.Label("Description"))
+		descStart := time.Now()
 		rendered, err := RenderMarkdown(epic.Description)
+		descDuration := time.Since(descStart)
+		if descDuration > 100*time.Millisecond {
+			debugLog(fmt.Sprintf("MODERN: Epic description rendering took %v", descDuration))
+		}
 		if err != nil {
 			return fmt.Errorf("ui: failed to render markdown: %w", err)
 		}
