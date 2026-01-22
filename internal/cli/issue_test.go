@@ -1313,3 +1313,112 @@ func TestManageIssuePR_InvalidID(t *testing.T) {
 		t.Errorf("Expected error about invalid ID, got: %v", err)
 	}
 }
+
+func TestDeleteIssue_WithYesFlag(t *testing.T) {
+	projectKey := sanitizeTestName("TEST" + t.Name())
+	defer func() {
+		projectDir, _ := storage.ProjectDir(projectKey)
+		os.RemoveAll(projectDir)
+	}()
+
+	// Create project and issue
+	rootCmd := NewRootCmd()
+	rootCmd.SetArgs([]string{"project", "create", projectKey})
+	rootCmd.SetOut(new(bytes.Buffer))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	rootCmd2 := NewRootCmd()
+	rootCmd2.SetArgs([]string{
+		"issue", "create",
+		"--project", projectKey,
+		"--title", "Issue to Delete",
+	})
+	rootCmd2.SetOut(new(bytes.Buffer))
+	if err := rootCmd2.Execute(); err != nil {
+		t.Fatalf("Failed to create issue: %v", err)
+	}
+
+	issueID := projectKey + "-1"
+
+	// Delete issue with -y flag
+	rootCmd3 := NewRootCmd()
+	rootCmd3.SetArgs([]string{
+		"issue", "delete", issueID,
+		"--project", projectKey,
+		"-y",
+	})
+
+	buf := new(bytes.Buffer)
+	rootCmd3.SetOut(buf)
+
+	err := rootCmd3.Execute()
+	if err != nil {
+		t.Fatalf("issue delete command failed: %v", err)
+	}
+
+	// Verify issue was deleted
+	issuePath, err := storage.IssuePath(projectKey, issueID)
+	if err != nil {
+		t.Fatalf("Failed to resolve issue path: %v", err)
+	}
+
+	if _, err := os.Stat(issuePath); err == nil {
+		t.Error("Issue file should not exist after deletion")
+	}
+
+	// Verify issue was removed from index
+	indexPath, err := storage.ProjectIndexPath(projectKey)
+	if err != nil {
+		t.Fatalf("Failed to resolve index path: %v", err)
+	}
+
+	var index models.ProjectIndex
+	if err := storage.ReadJSON(indexPath, &index); err != nil {
+		t.Fatalf("Failed to read index: %v", err)
+	}
+
+	if index.FindIssue(issueID) != nil {
+		t.Error("Issue should be removed from index after deletion")
+	}
+}
+
+func TestDeleteIssue_NonExistent(t *testing.T) {
+	projectKey := sanitizeTestName("TEST" + t.Name())
+	defer func() {
+		projectDir, _ := storage.ProjectDir(projectKey)
+		os.RemoveAll(projectDir)
+	}()
+
+	// Create project
+	rootCmd := NewRootCmd()
+	rootCmd.SetArgs([]string{"project", "create", projectKey})
+	rootCmd.SetOut(new(bytes.Buffer))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	// Try to delete non-existent issue
+	issueID := projectKey + "-999"
+	rootCmd2 := NewRootCmd()
+	rootCmd2.SetArgs([]string{
+		"issue", "delete", issueID,
+		"--project", projectKey,
+		"-y",
+	})
+
+	buf := new(bytes.Buffer)
+	errBuf := new(bytes.Buffer)
+	rootCmd2.SetOut(buf)
+	rootCmd2.SetErr(errBuf)
+
+	err := rootCmd2.Execute()
+	if err == nil {
+		t.Fatal("issue delete should fail for non-existent issue")
+	}
+
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Expected error about issue not found, got: %v", err)
+	}
+}

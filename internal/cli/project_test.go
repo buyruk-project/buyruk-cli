@@ -420,6 +420,84 @@ func TestResolveProjectKey(t *testing.T) {
 	}
 }
 
+func TestDeleteProject_WithYesFlag(t *testing.T) {
+	projectKey := sanitizeTestName("TEST" + t.Name())
+	defer func() {
+		projectDir, _ := storage.ProjectDir(projectKey)
+		os.RemoveAll(projectDir)
+	}()
+
+	// Create project
+	rootCmd := NewRootCmd()
+	rootCmd.SetArgs([]string{"project", "create", projectKey})
+	rootCmd.SetOut(new(bytes.Buffer))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	// Create an issue to verify it gets deleted too
+	rootCmd2 := NewRootCmd()
+	rootCmd2.SetArgs([]string{
+		"issue", "create",
+		"--project", projectKey,
+		"--title", "Test Issue",
+	})
+	rootCmd2.SetOut(new(bytes.Buffer))
+	if err := rootCmd2.Execute(); err != nil {
+		t.Fatalf("Failed to create issue: %v", err)
+	}
+
+	// Delete project with -y flag
+	rootCmd3 := NewRootCmd()
+	rootCmd3.SetArgs([]string{
+		"project", "delete", projectKey,
+		"-y",
+	})
+
+	buf := new(bytes.Buffer)
+	rootCmd3.SetOut(buf)
+
+	err := rootCmd3.Execute()
+	if err != nil {
+		t.Fatalf("project delete command failed: %v", err)
+	}
+
+	// Verify project directory was deleted
+	projectDir, err := storage.ProjectDir(projectKey)
+	if err != nil {
+		t.Fatalf("Failed to resolve project directory: %v", err)
+	}
+
+	if _, err := os.Stat(projectDir); err == nil {
+		t.Error("Project directory should not exist after deletion")
+	}
+}
+
+func TestDeleteProject_NonExistent(t *testing.T) {
+	projectKey := sanitizeTestName("TEST" + t.Name())
+
+	// Try to delete non-existent project
+	rootCmd := NewRootCmd()
+	rootCmd.SetArgs([]string{
+		"project", "delete", projectKey,
+		"-y",
+	})
+
+	buf := new(bytes.Buffer)
+	errBuf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(errBuf)
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("project delete should fail for non-existent project")
+	}
+
+	if !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("Expected error about project not existing, got: %v", err)
+	}
+}
+
 // sanitizeTestName converts a test name to a valid project key format
 // by removing invalid characters and converting to uppercase
 // Note: Config validation allows uppercase alphanumeric characters and hyphens;
