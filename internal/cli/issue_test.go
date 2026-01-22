@@ -962,7 +962,7 @@ func TestLinkIssue_AddDependency(t *testing.T) {
 		t.Fatalf("Failed to read issue: %v", err)
 	}
 
-	if !contains(issue.BlockedBy, issueID2) {
+	if !models.ContainsString(issue.BlockedBy, issueID2) {
 		t.Errorf("Issue BlockedBy should contain %q, got: %v", issueID2, issue.BlockedBy)
 	}
 }
@@ -1040,7 +1040,7 @@ func TestLinkIssue_RemoveDependency(t *testing.T) {
 		t.Fatalf("Failed to read issue: %v", err)
 	}
 
-	if contains(issue.BlockedBy, issueID2) {
+	if models.ContainsString(issue.BlockedBy, issueID2) {
 		t.Errorf("Issue BlockedBy should not contain %q, got: %v", issueID2, issue.BlockedBy)
 	}
 }
@@ -1173,7 +1173,7 @@ func TestManageIssuePR_AddPR(t *testing.T) {
 		t.Fatalf("Failed to read issue: %v", err)
 	}
 
-	if !contains(issue.PRs, prURL) {
+	if !models.ContainsString(issue.PRs, prURL) {
 		t.Errorf("Issue PRs should contain %q, got: %v", prURL, issue.PRs)
 	}
 }
@@ -1243,7 +1243,7 @@ func TestManageIssuePR_RemovePR(t *testing.T) {
 		t.Fatalf("Failed to read issue: %v", err)
 	}
 
-	if contains(issue.PRs, prURL) {
+	if models.ContainsString(issue.PRs, prURL) {
 		t.Errorf("Issue PRs should not contain %q, got: %v", prURL, issue.PRs)
 	}
 }
@@ -1298,14 +1298,4 @@ func TestManageIssuePR_InvalidID(t *testing.T) {
 	if !strings.Contains(err.Error(), "invalid issue ID") {
 		t.Errorf("Expected error about invalid ID, got: %v", err)
 	}
-}
-
-// Helper function to check if slice contains string
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }

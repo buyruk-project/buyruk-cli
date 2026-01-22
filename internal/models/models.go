@@ -208,6 +208,12 @@ func isValidProjectKey(key string) bool {
 
 // contains checks if a string slice contains a specific string
 func contains(slice []string, item string) bool {
+	return ContainsString(slice, item)
+}
+
+// ContainsString checks if a string slice contains a specific string
+// This is exported for use in test files to avoid duplication
+func ContainsString(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {
 			return true
