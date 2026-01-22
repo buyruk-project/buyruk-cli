@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -794,8 +795,8 @@ func TestWriteJSONAtomicCreate_Concurrent(t *testing.T) {
 
 	// Try to create the same file concurrently
 	numGoroutines := 10
-	successCount := 0
-	errorCount := 0
+	var successCount int64
+	var errorCount int64
 	done := make(chan bool, numGoroutines)
 
 	for i := 0; i < numGoroutines; i++ {
@@ -806,9 +807,9 @@ func TestWriteJSONAtomicCreate_Concurrent(t *testing.T) {
 			}
 			err := WriteJSONAtomicCreate(indexPath, testData)
 			if err == nil {
-				successCount++
+				atomic.AddInt64(&successCount, 1)
 			} else {
-				errorCount++
+				atomic.AddInt64(&errorCount, 1)
 			}
 			done <- true
 		}()
@@ -820,11 +821,13 @@ func TestWriteJSONAtomicCreate_Concurrent(t *testing.T) {
 	}
 
 	// Only one should succeed
-	if successCount != 1 {
-		t.Errorf("Expected exactly 1 successful creation, got %d", successCount)
+	finalSuccessCount := atomic.LoadInt64(&successCount)
+	finalErrorCount := atomic.LoadInt64(&errorCount)
+	if finalSuccessCount != 1 {
+		t.Errorf("Expected exactly 1 successful creation, got %d", finalSuccessCount)
 	}
-	if errorCount != numGoroutines-1 {
-		t.Errorf("Expected %d failures, got %d", numGoroutines-1, errorCount)
+	if finalErrorCount != int64(numGoroutines-1) {
+		t.Errorf("Expected %d failures, got %d", numGoroutines-1, finalErrorCount)
 	}
 
 	// Verify file exists and is valid
