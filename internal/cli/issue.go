@@ -24,6 +24,7 @@ func NewIssueCmd() *cobra.Command {
 	cmd.AddCommand(NewIssueUpdateCmd())
 	cmd.AddCommand(NewIssueLinkCmd())
 	cmd.AddCommand(NewIssuePRCmd())
+	cmd.AddCommand(NewIssueDeleteCmd())
 
 	return cmd
 }
@@ -109,6 +110,21 @@ func createIssue(cmd *cobra.Command) error {
 	priority, _ := cmd.Flags().GetString("priority")
 	description, _ := cmd.Flags().GetString("description")
 	epicID, _ := cmd.Flags().GetString("epic")
+
+	// Validate epic ID format if provided
+	if epicID != "" {
+		if err := validateEpicID(epicID); err != nil {
+			return fmt.Errorf("cli: invalid epic ID format: %w", err)
+		}
+		// Validate epic exists
+		epicPath, err := storage.EpicPath(projectKey, epicID)
+		if err != nil {
+			return fmt.Errorf("cli: failed to resolve epic path: %w", err)
+		}
+		if _, err := os.Stat(epicPath); os.IsNotExist(err) {
+			return fmt.Errorf("cli: epic %q not found", epicID)
+		}
+	}
 
 	// Create issue
 	issue := &models.Issue{
@@ -213,6 +229,7 @@ func NewIssueUpdateCmd() *cobra.Command {
 	}
 
 	cmd.Flags().String("title", "", "Update title")
+	cmd.Flags().String("type", "", "Update type")
 	cmd.Flags().String("status", "", "Update status")
 	cmd.Flags().String("priority", "", "Update priority")
 	cmd.Flags().String("description", "", "Update description")
@@ -249,6 +266,13 @@ func updateIssue(issueID string, cmd *cobra.Command) error {
 			iss.Title = title
 		}
 
+		if issueType, _ := cmd.Flags().GetString("type"); issueType != "" {
+			if !models.IsValidType(issueType) {
+				return fmt.Errorf("cli: invalid type %q", issueType)
+			}
+			iss.Type = issueType
+		}
+
 		if status, _ := cmd.Flags().GetString("status"); status != "" {
 			if !models.IsValidStatus(status) {
 				return fmt.Errorf("cli: invalid status %q", status)
@@ -268,6 +292,10 @@ func updateIssue(issueID string, cmd *cobra.Command) error {
 		}
 
 		if epicID, _ := cmd.Flags().GetString("epic"); epicID != "" {
+			// Validate epic ID format
+			if err := validateEpicID(epicID); err != nil {
+				return fmt.Errorf("cli: invalid epic ID format: %w", err)
+			}
 			// Validate epic exists before setting
 			epicPath, err := storage.EpicPath(projectKey, epicID)
 			if err != nil {
@@ -473,6 +501,129 @@ func manageIssuePR(issueID, prURL string, cmd *cobra.Command) error {
 		fmt.Fprintf(out, "Removed PR %s from %s\n", prURL, issueID)
 	} else {
 		fmt.Fprintf(out, "Added PR %s to %s\n", prURL, issueID)
+	}
+
+	return nil
+}
+
+// NewIssueDeleteCmd creates and returns the issue delete command.
+func NewIssueDeleteCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "delete <id>",
+		Short: "Delete an issue",
+		Long:  "Delete an issue from the project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			issueID := args[0]
+			return deleteIssue(issueID, cmd)
+		},
+	}
+
+	cmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt")
+
+	return cmd
+}
+
+// deleteIssue deletes an issue from the project.
+func deleteIssue(issueID string, cmd *cobra.Command) error {
+	// Parse issue ID
+	projectKey, _, err := models.ParseIssueID(issueID)
+	if err != nil {
+		return fmt.Errorf("cli: invalid issue ID %q: %w", issueID, err)
+	}
+
+	// Check if issue exists
+	issuePath, err := storage.IssuePath(projectKey, issueID)
+	if err != nil {
+		return fmt.Errorf("cli: failed to resolve issue path: %w", err)
+	}
+
+	if _, err := os.Stat(issuePath); os.IsNotExist(err) {
+		return fmt.Errorf("cli: issue %q not found", issueID)
+	}
+
+	// Check for issues that depend on this issue
+	indexPath, err := storage.ProjectIndexPath(projectKey)
+	if err != nil {
+		return fmt.Errorf("cli: failed to resolve index path: %w", err)
+	}
+
+	var index models.ProjectIndex
+	if err := storage.ReadJSON(indexPath, &index); err == nil {
+		// Check if any issues depend on this issue
+		dependentIssues := []string{}
+		for _, entry := range index.Issues {
+			// Load issue to check dependencies
+			depIssuePath, err := storage.IssuePath(projectKey, entry.ID)
+			if err != nil {
+				continue
+			}
+			var depIssue models.Issue
+			if err := storage.ReadJSON(depIssuePath, &depIssue); err != nil {
+				continue
+			}
+			for _, blockedBy := range depIssue.BlockedBy {
+				if blockedBy == issueID {
+					dependentIssues = append(dependentIssues, entry.ID)
+					break
+				}
+			}
+		}
+		if len(dependentIssues) > 0 {
+			errOut := cmd.ErrOrStderr()
+			fmt.Fprintf(errOut, "Warning: %d issue(s) depend on this issue: %s\n", len(dependentIssues), strings.Join(dependentIssues, ", "))
+		}
+	}
+
+	// Confirmation prompt (unless -y flag is set)
+	yes, _ := cmd.Flags().GetBool("yes")
+	if !yes {
+		errOut := cmd.ErrOrStderr()
+		fmt.Fprintf(errOut, "Are you sure you want to delete issue %q? (yes/no): ", issueID)
+
+		var response string
+		fmt.Scanln(&response)
+		if response != "yes" && response != "y" {
+			return fmt.Errorf("cli: deletion cancelled")
+		}
+	}
+
+	// Delete issue file
+	if err := os.Remove(issuePath); err != nil {
+		return fmt.Errorf("cli: failed to delete issue file: %w", err)
+	}
+
+	// Update project index atomically (remove issue from index)
+	if err := storage.UpdateJSONAtomic(indexPath, &index, func(v interface{}) error {
+		idx := v.(*models.ProjectIndex)
+		idx.RemoveIssue(issueID)
+		idx.UpdatedAt = time.Now().Format(time.RFC3339)
+		return nil
+	}); err != nil {
+		// Log warning but don't fail - issue file is already deleted
+		errOut := cmd.ErrOrStderr()
+		fmt.Fprintf(errOut, "Warning: failed to update project index: %v\n", err)
+	}
+
+	// Success message
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "Deleted issue %q\n", issueID)
+
+	return nil
+}
+
+// validateEpicID validates the format of an epic ID.
+// Epic IDs should be non-empty and contain only alphanumeric characters and hyphens.
+func validateEpicID(epicID string) error {
+	if epicID == "" {
+		return fmt.Errorf("epic ID cannot be empty")
+	}
+
+	// Check for invalid characters (only allow alphanumeric and hyphens)
+	for _, r := range epicID {
+		if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-') {
+			return fmt.Errorf("epic ID contains invalid character %q (only alphanumeric and hyphens allowed)", r)
+		}
 	}
 
 	return nil

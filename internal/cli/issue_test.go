@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -10,7 +11,6 @@ import (
 	"github.com/buyruk-project/buyruk-cli/internal/config"
 	"github.com/buyruk-project/buyruk-cli/internal/models"
 	"github.com/buyruk-project/buyruk-cli/internal/storage"
-	"github.com/buyruk-project/buyruk-cli/internal/strutil"
 )
 
 func TestNewIssueCmd(t *testing.T) {
@@ -119,6 +119,19 @@ func TestCreateIssue_WithAllFields(t *testing.T) {
 	rootCmd.SetOut(new(bytes.Buffer))
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	// Create epic first (required for issue with epic)
+	rootCmdEpic := NewRootCmd()
+	rootCmdEpic.SetArgs([]string{
+		"epic", "create",
+		"--project", projectKey,
+		"--id", "E-1",
+		"--title", "Test Epic",
+	})
+	rootCmdEpic.SetOut(new(bytes.Buffer))
+	if err := rootCmdEpic.Execute(); err != nil {
+		t.Fatalf("Failed to create epic: %v", err)
 	}
 
 	// Create issue with all fields
@@ -963,7 +976,7 @@ func TestLinkIssue_AddDependency(t *testing.T) {
 		t.Fatalf("Failed to read issue: %v", err)
 	}
 
-	if !strutil.Contains(issue.BlockedBy, issueID2) {
+	if !slices.Contains(issue.BlockedBy, issueID2) {
 		t.Errorf("Issue BlockedBy should contain %q, got: %v", issueID2, issue.BlockedBy)
 	}
 }
@@ -1041,7 +1054,7 @@ func TestLinkIssue_RemoveDependency(t *testing.T) {
 		t.Fatalf("Failed to read issue: %v", err)
 	}
 
-	if strutil.Contains(issue.BlockedBy, issueID2) {
+	if slices.Contains(issue.BlockedBy, issueID2) {
 		t.Errorf("Issue BlockedBy should not contain %q, got: %v", issueID2, issue.BlockedBy)
 	}
 }
@@ -1174,7 +1187,7 @@ func TestManageIssuePR_AddPR(t *testing.T) {
 		t.Fatalf("Failed to read issue: %v", err)
 	}
 
-	if !strutil.Contains(issue.PRs, prURL) {
+	if !slices.Contains(issue.PRs, prURL) {
 		t.Errorf("Issue PRs should contain %q, got: %v", prURL, issue.PRs)
 	}
 }
@@ -1244,7 +1257,7 @@ func TestManageIssuePR_RemovePR(t *testing.T) {
 		t.Fatalf("Failed to read issue: %v", err)
 	}
 
-	if strutil.Contains(issue.PRs, prURL) {
+	if slices.Contains(issue.PRs, prURL) {
 		t.Errorf("Issue PRs should not contain %q, got: %v", prURL, issue.PRs)
 	}
 }
