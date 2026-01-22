@@ -306,8 +306,11 @@ func updateIssue(issueID string, cmd *cobra.Command) error {
 			if err != nil {
 				return fmt.Errorf("cli: failed to resolve epic path: %w", err)
 			}
-			if _, err := os.Stat(epicPath); os.IsNotExist(err) {
-				return fmt.Errorf("cli: epic %q not found", epicID)
+			if _, err := os.Stat(epicPath); err != nil {
+				if os.IsNotExist(err) {
+					return fmt.Errorf("cli: epic %q not found", epicID)
+				}
+				return fmt.Errorf("cli: failed to stat epic path %q: %w", epicPath, err)
 			}
 			iss.EpicID = epicID
 		}
