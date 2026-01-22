@@ -151,6 +151,9 @@ func (idx *ProjectIndex) Validate() error {
 		if !IsValidStatus(entry.Status) {
 			return fmt.Errorf("models: index entry %s has invalid status %q", entry.ID, entry.Status)
 		}
+		if entry.Type != "" && !IsValidType(entry.Type) {
+			return fmt.Errorf("models: index entry %s has invalid type %q", entry.ID, entry.Type)
+		}
 	}
 
 	return nil

@@ -180,12 +180,6 @@ func TestIssue_Validate(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Issue.Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if err != nil && !tt.wantErr {
-				// Verify error message has models: prefix
-				if err.Error()[:7] != "models:" {
-					t.Errorf("Issue.Validate() error should have 'models:' prefix, got: %q", err.Error())
-				}
-			}
 		})
 	}
 }
@@ -342,12 +336,6 @@ func TestEpic_Validate(t *testing.T) {
 			err := tt.epic.Validate()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Epic.Validate() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if err != nil && !tt.wantErr {
-				// Verify error message has models: prefix
-				if err.Error()[:7] != "models:" {
-					t.Errorf("Epic.Validate() error should have 'models:' prefix, got: %q", err.Error())
-				}
 			}
 		})
 	}
@@ -534,6 +522,16 @@ func TestProjectIndex_Validate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "index entry with invalid type",
+			index: &ProjectIndex{
+				ProjectKey: "CORE",
+				Issues: []IndexEntry{
+					{ID: "CORE-10", Title: "Issue 10", Status: StatusTODO, Type: "INVALID"},
+				},
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -541,12 +539,6 @@ func TestProjectIndex_Validate(t *testing.T) {
 			err := tt.index.Validate()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ProjectIndex.Validate() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if err != nil && !tt.wantErr {
-				// Verify error message has models: prefix
-				if err.Error()[:7] != "models:" {
-					t.Errorf("ProjectIndex.Validate() error should have 'models:' prefix, got: %q", err.Error())
-				}
 			}
 		})
 	}
@@ -638,12 +630,6 @@ func TestProject_Validate(t *testing.T) {
 			err := tt.project.Validate()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Project.Validate() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if err != nil && !tt.wantErr {
-				// Verify error message has models: prefix
-				if err.Error()[:7] != "models:" {
-					t.Errorf("Project.Validate() error should have 'models:' prefix, got: %q", err.Error())
-				}
 			}
 		})
 	}
@@ -901,7 +887,7 @@ func TestProject_JSON(t *testing.T) {
 	}
 }
 
-// Test Validation Wrapper Functions
+// Test Validation Methods (direct calls)
 
 func TestValidateIssue(t *testing.T) {
 	issue := &Issue{
@@ -911,17 +897,17 @@ func TestValidateIssue(t *testing.T) {
 		Status: StatusTODO,
 	}
 
-	err := ValidateIssue(issue)
+	err := issue.Validate()
 	if err != nil {
-		t.Errorf("ValidateIssue() should succeed for valid issue, got: %v", err)
+		t.Errorf("Issue.Validate() should succeed for valid issue, got: %v", err)
 	}
 
 	invalidIssue := &Issue{
 		ID: "",
 	}
-	err = ValidateIssue(invalidIssue)
+	err = invalidIssue.Validate()
 	if err == nil {
-		t.Error("ValidateIssue() should fail for invalid issue")
+		t.Error("Issue.Validate() should fail for invalid issue")
 	}
 }
 
@@ -931,17 +917,17 @@ func TestValidateEpic(t *testing.T) {
 		Title: "Test Epic",
 	}
 
-	err := ValidateEpic(epic)
+	err := epic.Validate()
 	if err != nil {
-		t.Errorf("ValidateEpic() should succeed for valid epic, got: %v", err)
+		t.Errorf("Epic.Validate() should succeed for valid epic, got: %v", err)
 	}
 
 	invalidEpic := &Epic{
 		ID: "",
 	}
-	err = ValidateEpic(invalidEpic)
+	err = invalidEpic.Validate()
 	if err == nil {
-		t.Error("ValidateEpic() should fail for invalid epic")
+		t.Error("Epic.Validate() should fail for invalid epic")
 	}
 }
 
@@ -950,17 +936,17 @@ func TestValidateProject(t *testing.T) {
 		Key: "CORE",
 	}
 
-	err := ValidateProject(project)
+	err := project.Validate()
 	if err != nil {
-		t.Errorf("ValidateProject() should succeed for valid project, got: %v", err)
+		t.Errorf("Project.Validate() should succeed for valid project, got: %v", err)
 	}
 
 	invalidProject := &Project{
 		Key: "",
 	}
-	err = ValidateProject(invalidProject)
+	err = invalidProject.Validate()
 	if err == nil {
-		t.Error("ValidateProject() should fail for invalid project")
+		t.Error("Project.Validate() should fail for invalid project")
 	}
 }
 
@@ -972,17 +958,17 @@ func TestValidateProjectIndex(t *testing.T) {
 		},
 	}
 
-	err := ValidateProjectIndex(idx)
+	err := idx.Validate()
 	if err != nil {
-		t.Errorf("ValidateProjectIndex() should succeed for valid index, got: %v", err)
+		t.Errorf("ProjectIndex.Validate() should succeed for valid index, got: %v", err)
 	}
 
 	invalidIdx := &ProjectIndex{
 		ProjectKey: "",
 	}
-	err = ValidateProjectIndex(invalidIdx)
+	err = invalidIdx.Validate()
 	if err == nil {
-		t.Error("ValidateProjectIndex() should fail for invalid index")
+		t.Error("ProjectIndex.Validate() should fail for invalid index")
 	}
 }
 
