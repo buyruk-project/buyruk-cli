@@ -65,9 +65,9 @@ Following the GitHub CLI (`gh`) architecture pattern:
   - Only add the label or use manual trigger when explicitly requested in the prompt
 - **WSL & Environment Directives**: 
   - **This project runs in WSL (Windows Subsystem for Linux)**
-  - For git/GitHub operations (push, PR creation, etc.), **ALWAYS use `required_permissions: ['all']`** to access the WSL environment directly
-  - The sandboxed environment runs as root and lacks SSH keys/credentials, causing failures for git push operations
-  - Using `['all']` permissions allows commands to run as the actual user with proper SSH/GitHub authentication
+  - **ALWAYS use `required_permissions: ['all']`** to access the WSL environment directly
+  - The sandboxed environment runs as root and lacks SSH keys/credentials and permissions, causing failures operations
+  - Using `['all']` permissions allows commands to run as the actual user with proper SSH/GitHub authentication and all other permissions
   - Example: `run_terminal_cmd(..., required_permissions=['all'])` for git operations
 
 ## 📝 Rules of Engagement
