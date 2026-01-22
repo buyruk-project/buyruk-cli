@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -139,7 +140,30 @@ func createIssue(cmd *cobra.Command) error {
 		return fmt.Errorf("cli: failed to create issue file: %w", err)
 	}
 
-	// Update project index
+	// Update project index (read-modify-write must be atomic to prevent race conditions)
+	// Acquire lock first to ensure the entire read-modify-write operation is atomic
+	cleanup, err := storage.AcquireLock(projectKey)
+	if err != nil {
+		return fmt.Errorf("cli: failed to acquire lock for project index update: %w", err)
+	}
+	defer cleanup()
+
+	// Begin transaction for index update
+	if err := storage.BeginTransaction(projectKey, "update_index", map[string]interface{}{
+		"operation": "add_issue",
+		"issue_id":  issueID,
+	}); err != nil {
+		return fmt.Errorf("cli: failed to begin transaction: %w", err)
+	}
+
+	// Track success to conditionally rollback only on failure
+	success := false
+	defer func() {
+		if !success {
+			storage.RollbackTransaction(projectKey)
+		}
+	}()
+
 	indexPath, err := storage.ProjectIndexPath(projectKey)
 	if err != nil {
 		return fmt.Errorf("cli: failed to resolve index path: %w", err)
@@ -153,9 +177,22 @@ func createIssue(cmd *cobra.Command) error {
 	index.AddIssue(issue)
 	index.UpdatedAt = time.Now().Format(time.RFC3339)
 
-	if err := storage.WriteJSONAtomic(indexPath, &index); err != nil {
-		return fmt.Errorf("cli: failed to update project index: %w", err)
+	// Marshal and write atomically (WriteAtomic doesn't acquire lock, we already have it)
+	data, err := json.MarshalIndent(&index, "", "  ")
+	if err != nil {
+		return fmt.Errorf("cli: failed to marshal index: %w", err)
 	}
+
+	if err := storage.WriteAtomic(indexPath, data); err != nil {
+		return fmt.Errorf("cli: failed to write index: %w", err)
+	}
+
+	// Commit transaction
+	if err := storage.CommitTransaction(projectKey); err != nil {
+		return fmt.Errorf("cli: failed to commit transaction: %w", err)
+	}
+
+	success = true
 
 	// Success message
 	out := cmd.OutOrStdout()
