@@ -14,7 +14,7 @@ var (
 	// cachedRenderer is a cached markdown renderer to avoid recreating it on every call
 	cachedRenderer *glamour.TermRenderer
 	rendererOnce   sync.Once
-	rendererErr     error
+	rendererErr    error
 )
 
 // getMarkdownRenderer returns a cached markdown renderer instance
@@ -25,7 +25,7 @@ func getMarkdownRenderer() (*glamour.TermRenderer, error) {
 	rendererOnce.Do(func() {
 		debugLog("MARKDOWN: Creating renderer (first time)...")
 		createStart := time.Now()
-		
+
 		// Use a fixed "dark" style instead of WithAutoStyle() to avoid slow terminal detection
 		// WithAutoStyle() does terminal capability detection which takes ~5 seconds
 		// The "dark" style works well in most terminals and is much faster
