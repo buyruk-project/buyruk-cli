@@ -68,25 +68,16 @@ func createProject(projectKey string, cmd *cobra.Command) error {
 		return fmt.Errorf("cli: invalid project key %q (must contain only uppercase letters, numbers, and hyphens)", projectKey)
 	}
 
-	// Check if project already exists
-	projectDir, err := storage.ProjectDir(projectKey)
-	if err != nil {
-		return fmt.Errorf("cli: failed to resolve project directory: %w", err)
-	}
-
-	if _, err := os.Stat(projectDir); err == nil {
-		return fmt.Errorf("cli: project %q already exists", projectKey)
-	}
-
 	// Get project name from flag or use key
 	projectName, _ := cmd.Flags().GetString("name")
 	if projectName == "" {
 		projectName = projectKey
 	}
 
-	// Create project structure
-	if err := os.MkdirAll(projectDir, 0755); err != nil {
-		return fmt.Errorf("cli: failed to create project directory: %w", err)
+	// Resolve paths
+	projectDir, err := storage.ProjectDir(projectKey)
+	if err != nil {
+		return fmt.Errorf("cli: failed to resolve project directory: %w", err)
 	}
 
 	issuesDir, err := storage.IssuesDir(projectKey)
@@ -94,20 +85,18 @@ func createProject(projectKey string, cmd *cobra.Command) error {
 		return fmt.Errorf("cli: failed to resolve issues directory: %w", err)
 	}
 
-	if err := os.MkdirAll(issuesDir, 0755); err != nil {
-		return fmt.Errorf("cli: failed to create issues directory: %w", err)
-	}
-
 	epicsDir, err := storage.EpicsDir(projectKey)
 	if err != nil {
 		return fmt.Errorf("cli: failed to resolve epics directory: %w", err)
 	}
 
-	if err := os.MkdirAll(epicsDir, 0755); err != nil {
-		return fmt.Errorf("cli: failed to create epics directory: %w", err)
+	indexPath, err := storage.ProjectIndexPath(projectKey)
+	if err != nil {
+		return fmt.Errorf("cli: failed to resolve index path: %w", err)
 	}
 
-	// Create initial project index
+	// Create initial project index atomically (fails if project already exists)
+	// This is the atomic check - if index file exists, project exists
 	index := &models.ProjectIndex{
 		ProjectKey:  projectKey,
 		ProjectName: projectName,
@@ -116,13 +105,25 @@ func createProject(projectKey string, cmd *cobra.Command) error {
 		UpdatedAt:   time.Now().Format(time.RFC3339),
 	}
 
-	indexPath, err := storage.ProjectIndexPath(projectKey)
-	if err != nil {
-		return fmt.Errorf("cli: failed to resolve index path: %w", err)
+	if err := storage.WriteJSONAtomicCreate(indexPath, index); err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return fmt.Errorf("cli: project %q already exists", projectKey)
+		}
+		return fmt.Errorf("cli: failed to create project index: %w", err)
 	}
 
-	if err := storage.WriteJSONAtomic(indexPath, index); err != nil {
-		return fmt.Errorf("cli: failed to create project index: %w", err)
+	// Create project structure directories (idempotent, safe to call multiple times)
+	// These are created after the atomic index creation to ensure project is registered first
+	if err := os.MkdirAll(projectDir, 0755); err != nil {
+		return fmt.Errorf("cli: failed to create project directory: %w", err)
+	}
+
+	if err := os.MkdirAll(issuesDir, 0755); err != nil {
+		return fmt.Errorf("cli: failed to create issues directory: %w", err)
+	}
+
+	if err := os.MkdirAll(epicsDir, 0755); err != nil {
+		return fmt.Errorf("cli: failed to create epics directory: %w", err)
 	}
 
 	// Success message
@@ -197,31 +198,25 @@ func repairProject(projectKey string, cmd *cobra.Command) error {
 		})
 	}
 
-	// Load existing index to preserve metadata
+	// Update index atomically (read-modify-write with locking)
 	indexPath, err := storage.ProjectIndexPath(projectKey)
 	if err != nil {
 		return fmt.Errorf("cli: failed to resolve index path: %w", err)
 	}
 
 	var index models.ProjectIndex
-	if _, err := os.Stat(indexPath); err == nil {
-		if err := storage.ReadJSON(indexPath, &index); err != nil {
-			return fmt.Errorf("cli: failed to read existing index: %w", err)
+	if err := storage.UpdateJSONAtomic(indexPath, &index, func(v interface{}) error {
+		idx := v.(*models.ProjectIndex)
+		// If index doesn't exist, initialize it
+		if idx.ProjectKey == "" {
+			idx.ProjectKey = projectKey
+			idx.Issues = []models.IndexEntry{}
 		}
-	} else {
-		// Create new index if it doesn't exist
-		index = models.ProjectIndex{
-			ProjectKey: projectKey,
-			Issues:     []models.IndexEntry{},
-		}
-	}
-
-	// Update index with rebuilt entries
-	index.Issues = indexEntries
-	index.UpdatedAt = time.Now().Format(time.RFC3339)
-
-	// Write index atomically
-	if err := storage.WriteJSONAtomic(indexPath, &index); err != nil {
+		// Update with rebuilt entries
+		idx.Issues = indexEntries
+		idx.UpdatedAt = time.Now().Format(time.RFC3339)
+		return nil
+	}); err != nil {
 		return fmt.Errorf("cli: failed to write repaired index: %w", err)
 	}
 
