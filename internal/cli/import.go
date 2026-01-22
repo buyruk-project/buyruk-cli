@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/buyruk-project/buyruk-cli/internal/models"
 	"github.com/buyruk-project/buyruk-cli/internal/storage"
 	"github.com/spf13/cobra"
 )
@@ -88,15 +89,9 @@ func importProject(filePath string, cmd *cobra.Command) error {
 		return fmt.Errorf("cli: failed to create epics directory: %w", err)
 	}
 
-	// Write project index
-	indexPath, err := storage.ProjectIndexPath(projectKey)
-	if err != nil {
-		return fmt.Errorf("cli: failed to resolve index path: %w", err)
-	}
-
-	if err := storage.WriteJSONAtomic(indexPath, exportData.Project); err != nil {
-		return fmt.Errorf("cli: failed to write project index: %w", err)
-	}
+	// Track successfully imported items to build index
+	var importedIssues []models.IndexEntry
+	var importedEpicsCount int
 
 	// Write all issues
 	for _, issue := range exportData.Issues {
@@ -119,6 +114,15 @@ func importProject(filePath string, cmd *cobra.Command) error {
 			fmt.Fprintf(errOut, "Warning: failed to write issue %s: %v\n", issue.ID, err)
 			continue
 		}
+
+		// Track successfully imported issue
+		importedIssues = append(importedIssues, models.IndexEntry{
+			ID:     issue.ID,
+			Title:  issue.Title,
+			Status: issue.Status,
+			Type:   issue.Type,
+			EpicID: issue.EpicID,
+		})
 	}
 
 	// Write all epics
@@ -142,12 +146,33 @@ func importProject(filePath string, cmd *cobra.Command) error {
 			fmt.Fprintf(errOut, "Warning: failed to write epic %s: %v\n", epic.ID, err)
 			continue
 		}
+
+		// Track successfully imported epic
+		importedEpicsCount++
 	}
 
-	// Success message
+	// Build and write project index from successfully imported items
+	indexPath, err := storage.ProjectIndexPath(projectKey)
+	if err != nil {
+		return fmt.Errorf("cli: failed to resolve index path: %w", err)
+	}
+
+	index := &models.ProjectIndex{
+		ProjectKey:  exportData.Project.ProjectKey,
+		ProjectName: exportData.Project.ProjectName,
+		Issues:      importedIssues,
+		CreatedAt:   exportData.Project.CreatedAt,
+		UpdatedAt:   exportData.Project.UpdatedAt,
+	}
+
+	if err := storage.WriteJSONAtomic(indexPath, index); err != nil {
+		return fmt.Errorf("cli: failed to write project index: %w", err)
+	}
+
+	// Success message with counts of successfully imported items
 	out := cmd.OutOrStdout()
 	fmt.Fprintf(out, "Imported project %q (%d issues, %d epics)\n",
-		projectKey, len(exportData.Issues), len(exportData.Epics))
+		projectKey, len(importedIssues), importedEpicsCount)
 
 	return nil
 }

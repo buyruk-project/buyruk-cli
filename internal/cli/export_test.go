@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -247,7 +248,7 @@ func TestExportProject_MultipleIssues(t *testing.T) {
 	// Create multiple issues
 	for i := 1; i <= 3; i++ {
 		rootCmd2 := NewRootCmd()
-		rootCmd2.SetArgs([]string{"issue", "create", "--project", projectKey, "--title", "Issue " + string(rune('0'+i))})
+		rootCmd2.SetArgs([]string{"issue", "create", "--project", projectKey, "--title", fmt.Sprintf("Issue %d", i)})
 		rootCmd2.SetOut(new(bytes.Buffer))
 		if err := rootCmd2.Execute(); err != nil {
 			t.Fatalf("Failed to create issue %d: %v", i, err)
