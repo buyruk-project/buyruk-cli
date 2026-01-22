@@ -255,7 +255,7 @@ func NewProjectDeleteCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt")
+	cmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt and override safety checks (force delete)")
 
 	return cmd
 }

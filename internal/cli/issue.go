@@ -527,7 +527,7 @@ func NewIssueDeleteCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt")
+	cmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt and override safety checks (force delete)")
 
 	return cmd
 }
@@ -669,16 +669,18 @@ func deleteIssue(issueID string, cmd *cobra.Command) error {
 }
 
 // validateEpicID validates the format of an epic ID.
-// Epic IDs should be non-empty and contain only alphanumeric characters and hyphens.
+// Epic IDs should be non-empty and contain only uppercase alphanumeric characters and hyphens.
+// Enforcing uppercase prevents collisions on case-insensitive filesystems (Windows/macOS).
 func validateEpicID(epicID string) error {
 	if epicID == "" {
 		return fmt.Errorf("epic ID cannot be empty")
 	}
 
-	// Check for invalid characters (only allow alphanumeric and hyphens)
+	// Check for invalid characters (only allow uppercase alphanumeric and hyphens)
+	// Enforce uppercase to prevent collisions on case-insensitive filesystems
 	for _, r := range epicID {
-		if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-') {
-			return fmt.Errorf("epic ID contains invalid character %q (only alphanumeric and hyphens allowed)", r)
+		if !((r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-') {
+			return fmt.Errorf("epic ID contains invalid character %q (only uppercase alphanumeric and hyphens allowed)", r)
 		}
 	}
 

@@ -170,11 +170,11 @@ func getNextEpicSequence(projectKey string) (int, error) {
 		epicID := strings.TrimSuffix(entry.Name(), ".json")
 
 		// Parse sequence from epic ID (format: E-1, E-2, etc.)
-		// Support both "E-1" and potentially project-prefixed formats
-		parts := strings.Split(epicID, "-")
-		if len(parts) >= 2 {
-			// Get the last part which should be the sequence number
-			seqStr := parts[len(parts)-1]
+		// Only consider IDs matching the standard "E-<n>" pattern for auto-increment
+		// This prevents unrelated epic IDs (e.g., "CUSTOM-99") from affecting the sequence
+		if strings.HasPrefix(epicID, "E-") {
+			// Extract the sequence number after "E-"
+			seqStr := strings.TrimPrefix(epicID, "E-")
 			var seq int
 			if _, err := fmt.Sscanf(seqStr, "%d", &seq); err == nil {
 				if seq > maxSeq {
@@ -401,7 +401,7 @@ func listEpics(cmd *cobra.Command) error {
 func renderEpicList(epics []*models.Epic, renderer ui.Renderer, cmd *cobra.Command, w interface{ Write([]byte) (int, error) }) error {
 	// For JSON format, render as an array
 	format := config.ResolveFormat(cmd)
-	if format == "json" {
+	if format == config.DefaultFormatJSON {
 		encoder := json.NewEncoder(w)
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(epics)
@@ -433,7 +433,7 @@ func NewEpicDeleteCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt")
+	cmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt and override safety checks (force delete)")
 
 	return cmd
 }
