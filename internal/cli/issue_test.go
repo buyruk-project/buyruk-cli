@@ -10,6 +10,7 @@ import (
 	"github.com/buyruk-project/buyruk-cli/internal/config"
 	"github.com/buyruk-project/buyruk-cli/internal/models"
 	"github.com/buyruk-project/buyruk-cli/internal/storage"
+	"github.com/buyruk-project/buyruk-cli/internal/strutil"
 )
 
 func TestNewIssueCmd(t *testing.T) {
@@ -962,7 +963,7 @@ func TestLinkIssue_AddDependency(t *testing.T) {
 		t.Fatalf("Failed to read issue: %v", err)
 	}
 
-	if !models.ContainsString(issue.BlockedBy, issueID2) {
+	if !strutil.Contains(issue.BlockedBy, issueID2) {
 		t.Errorf("Issue BlockedBy should contain %q, got: %v", issueID2, issue.BlockedBy)
 	}
 }
@@ -1040,7 +1041,7 @@ func TestLinkIssue_RemoveDependency(t *testing.T) {
 		t.Fatalf("Failed to read issue: %v", err)
 	}
 
-	if models.ContainsString(issue.BlockedBy, issueID2) {
+	if strutil.Contains(issue.BlockedBy, issueID2) {
 		t.Errorf("Issue BlockedBy should not contain %q, got: %v", issueID2, issue.BlockedBy)
 	}
 }
@@ -1173,7 +1174,7 @@ func TestManageIssuePR_AddPR(t *testing.T) {
 		t.Fatalf("Failed to read issue: %v", err)
 	}
 
-	if !models.ContainsString(issue.PRs, prURL) {
+	if !strutil.Contains(issue.PRs, prURL) {
 		t.Errorf("Issue PRs should contain %q, got: %v", prURL, issue.PRs)
 	}
 }
@@ -1243,7 +1244,7 @@ func TestManageIssuePR_RemovePR(t *testing.T) {
 		t.Fatalf("Failed to read issue: %v", err)
 	}
 
-	if models.ContainsString(issue.PRs, prURL) {
+	if strutil.Contains(issue.PRs, prURL) {
 		t.Errorf("Issue PRs should not contain %q, got: %v", prURL, issue.PRs)
 	}
 }

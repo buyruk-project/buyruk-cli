@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/buyruk-project/buyruk-cli/internal/strutil"
 )
 
 // Issue represents a task or bug issue
@@ -50,26 +52,26 @@ func (i *Issue) Validate() error {
 
 // AddDependency adds a dependency (blocked by) to the issue
 func (i *Issue) AddDependency(issueID string) {
-	if !ContainsString(i.BlockedBy, issueID) {
+	if !strutil.Contains(i.BlockedBy, issueID) {
 		i.BlockedBy = append(i.BlockedBy, issueID)
 	}
 }
 
 // RemoveDependency removes a dependency from the issue
 func (i *Issue) RemoveDependency(issueID string) {
-	i.BlockedBy = remove(i.BlockedBy, issueID)
+	i.BlockedBy = strutil.Remove(i.BlockedBy, issueID)
 }
 
 // AddPR adds a PR URL to the issue
 func (i *Issue) AddPR(url string) {
-	if !ContainsString(i.PRs, url) {
+	if !strutil.Contains(i.PRs, url) {
 		i.PRs = append(i.PRs, url)
 	}
 }
 
 // RemovePR removes a PR URL from the issue
 func (i *Issue) RemovePR(url string) {
-	i.PRs = remove(i.PRs, url)
+	i.PRs = strutil.Remove(i.PRs, url)
 }
 
 // Epic represents an epic that groups multiple issues
@@ -205,27 +207,6 @@ func isValidProjectKey(key string) bool {
 }
 
 // Helper functions
-
-// ContainsString checks if a string slice contains a specific string
-func ContainsString(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
-}
-
-// remove removes a string from a string slice
-func remove(slice []string, item string) []string {
-	result := []string{}
-	for _, s := range slice {
-		if s != item {
-			result = append(result, s)
-		}
-	}
-	return result
-}
 
 // removeIndexEntry removes an IndexEntry from a slice by ID
 func removeIndexEntry(entries []IndexEntry, id string) []IndexEntry {
