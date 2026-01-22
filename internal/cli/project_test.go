@@ -422,7 +422,8 @@ func TestResolveProjectKey(t *testing.T) {
 
 // sanitizeTestName converts a test name to a valid project key format
 // by removing invalid characters and converting to uppercase
-// Note: Config validation only allows uppercase alphanumeric (no hyphens)
+// Note: Config validation allows uppercase alphanumeric characters and hyphens;
+// this helper produces a simplified valid key by stripping hyphens and other symbols.
 func sanitizeTestName(name string) string {
 	var result strings.Builder
 	for _, r := range name {
