@@ -710,12 +710,6 @@ func TestParseIssueID(t *testing.T) {
 					t.Errorf("ParseIssueID(%q) sequence = %d, want %d", tt.id, gotSequence, tt.wantSequence)
 				}
 			}
-			if err != nil && !tt.wantErr {
-				// Verify error message has models: prefix
-				if err.Error()[:7] != "models:" {
-					t.Errorf("ParseIssueID() error should have 'models:' prefix, got: %q", err.Error())
-				}
-			}
 		})
 	}
 }
