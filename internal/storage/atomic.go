@@ -114,6 +114,67 @@ func extractProjectKeyFromPath(path string) (string, error) {
 	return parts[projectsIndex+1], nil
 }
 
+// WriteJSONAtomicCreate writes a JSON-serializable value to a file atomically, but only if the file doesn't exist.
+// This function handles the full atomic protocol: lock, transaction, check existence, write, commit.
+// It extracts the project key from the file path.
+// Returns an error if the file already exists.
+func WriteJSONAtomicCreate(path string, v interface{}) error {
+	// Extract project key from path
+	projectKey, err := extractProjectKeyFromPath(path)
+	if err != nil {
+		return fmt.Errorf("storage: failed to extract project key from path: %w", err)
+	}
+
+	// Step 1: Acquire lock
+	cleanup, err := AcquireLock(projectKey)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Step 2: Begin transaction
+	if err := BeginTransaction(projectKey, "write_json_create", map[string]interface{}{
+		"file": path,
+	}); err != nil {
+		return err
+	}
+
+	// Track success to conditionally rollback only on failure
+	success := false
+	defer func() {
+		if !success {
+			RollbackTransaction(projectKey)
+		}
+	}()
+
+	// Step 3: Check if file already exists (inside lock to prevent race condition)
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("storage: file already exists: %s", path)
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("storage: failed to check file existence: %w", err)
+	}
+
+	// Step 4: Marshal JSON
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Errorf("storage: failed to marshal JSON: %w", err)
+	}
+
+	// Step 5: Write atomically
+	if err := WriteAtomic(path, data); err != nil {
+		return err
+	}
+
+	// Step 6: Commit transaction
+	if err := CommitTransaction(projectKey); err != nil {
+		return err
+	}
+
+	// Mark as successful so rollback won't execute
+	success = true
+	return nil
+}
+
 // UpdateFunc is a function type that modifies a JSON-serializable value in place.
 // It receives a pointer to the current value and modifies it directly.
 // If the file doesn't exist, v will be a zero value of its type.

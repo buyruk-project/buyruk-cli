@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/buyruk-project/buyruk-cli/internal/config"
@@ -124,18 +125,16 @@ func createIssue(cmd *cobra.Command) error {
 		return fmt.Errorf("cli: invalid issue: %w", err)
 	}
 
-	// Write issue file
+	// Write issue file atomically (fails if file already exists)
 	issuePath, err := storage.IssuePath(projectKey, issueID)
 	if err != nil {
 		return fmt.Errorf("cli: failed to resolve issue path: %w", err)
 	}
 
-	// Check if issue already exists
-	if _, err := os.Stat(issuePath); err == nil {
-		return fmt.Errorf("cli: issue %q already exists", issueID)
-	}
-
-	if err := storage.WriteJSONAtomic(issuePath, issue); err != nil {
+	if err := storage.WriteJSONAtomicCreate(issuePath, issue); err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return fmt.Errorf("cli: issue %q already exists", issueID)
+		}
 		return fmt.Errorf("cli: failed to create issue file: %w", err)
 	}
 

@@ -449,6 +449,82 @@ func TestGetNextIssueSequence(t *testing.T) {
 	}
 }
 
+func TestCreateIssue_ConcurrentSameID(t *testing.T) {
+	// Use unique project key to avoid conflicts
+	projectKey := sanitizeTestName("TEST" + t.Name())
+	// Clean up after test
+	defer func() {
+		projectDir, _ := storage.ProjectDir(projectKey)
+		os.RemoveAll(projectDir)
+	}()
+
+	// Create project first
+	rootCmd := NewRootCmd()
+	rootCmd.SetArgs([]string{"project", "create", projectKey})
+	rootCmd.SetOut(new(bytes.Buffer))
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	// Try to create the same issue concurrently
+	issueID := projectKey + "-1"
+	numGoroutines := 5
+	successCount := 0
+	errorCount := 0
+	done := make(chan bool, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			rootCmd := NewRootCmd()
+			rootCmd.SetArgs([]string{
+				"issue", "create",
+				"--project", projectKey,
+				"--id", issueID,
+				"--title", "Concurrent Issue",
+			})
+			rootCmd.SetOut(new(bytes.Buffer))
+			rootCmd.SetErr(new(bytes.Buffer))
+
+			err := rootCmd.Execute()
+			if err == nil {
+				successCount++
+			} else {
+				errorCount++
+			}
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines to complete
+	for i := 0; i < numGoroutines; i++ {
+		<-done
+	}
+
+	// Only one should succeed, others should fail with "already exists"
+	if successCount != 1 {
+		t.Errorf("Expected exactly 1 successful creation, got %d", successCount)
+	}
+	if errorCount != numGoroutines-1 {
+		t.Errorf("Expected %d failures, got %d", numGoroutines-1, errorCount)
+	}
+
+	// Verify only one issue file exists
+	issuePath, _ := storage.IssuePath(projectKey, issueID)
+	if _, err := os.Stat(issuePath); os.IsNotExist(err) {
+		t.Fatal("Issue file was not created")
+	}
+
+	// Verify issue content is valid
+	var issue models.Issue
+	if err := storage.ReadJSON(issuePath, &issue); err != nil {
+		t.Fatalf("Failed to read issue: %v", err)
+	}
+
+	if issue.ID != issueID {
+		t.Errorf("Issue ID = %q, want %q", issue.ID, issueID)
+	}
+}
+
 func TestCreateIssue_InvalidType(t *testing.T) {
 	// Use unique project key to avoid conflicts
 	projectKey := sanitizeTestName("TEST" + t.Name())

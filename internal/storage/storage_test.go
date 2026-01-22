@@ -723,6 +723,116 @@ func TestUpdateJSONAtomic_Concurrent(t *testing.T) {
 	}
 }
 
+// TestWriteJSONAtomicCreate tests atomic JSON create (fails if exists)
+func TestWriteJSONAtomicCreate(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalUserConfigDir := userConfigDirFunc
+	originalCachedDir := cachedConfigDir
+	defer func() {
+		userConfigDirFunc = originalUserConfigDir
+		cachedConfigDir = originalCachedDir
+	}()
+
+	resetConfigDirCache()
+	userConfigDirFunc = func() (string, error) {
+		return tmpDir, nil
+	}
+
+	projectKey := "TEST-PROJ"
+	projectDir, _ := ProjectDir(projectKey)
+	os.MkdirAll(projectDir, 0755)
+
+	indexPath, _ := ProjectIndexPath(projectKey)
+
+	// Test creating new file
+	testData := map[string]interface{}{
+		"id":    "T-123",
+		"title": "Test Issue",
+	}
+
+	err := WriteJSONAtomicCreate(indexPath, testData)
+	if err != nil {
+		t.Fatalf("WriteJSONAtomicCreate() failed: %v", err)
+	}
+
+	// Verify file was created
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		t.Fatal("File was not created")
+	}
+
+	// Test that creating again fails
+	err = WriteJSONAtomicCreate(indexPath, testData)
+	if err == nil {
+		t.Fatal("WriteJSONAtomicCreate() should fail when file already exists")
+	}
+
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("WriteJSONAtomicCreate() error = %q, want error about file already existing", err.Error())
+	}
+}
+
+// TestWriteJSONAtomicCreate_Concurrent tests concurrent creation attempts
+func TestWriteJSONAtomicCreate_Concurrent(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalUserConfigDir := userConfigDirFunc
+	originalCachedDir := cachedConfigDir
+	defer func() {
+		userConfigDirFunc = originalUserConfigDir
+		cachedConfigDir = originalCachedDir
+	}()
+
+	resetConfigDirCache()
+	userConfigDirFunc = func() (string, error) {
+		return tmpDir, nil
+	}
+
+	projectKey := "TEST-PROJ"
+	projectDir, _ := ProjectDir(projectKey)
+	os.MkdirAll(projectDir, 0755)
+
+	indexPath, _ := ProjectIndexPath(projectKey)
+
+	// Try to create the same file concurrently
+	numGoroutines := 10
+	successCount := 0
+	errorCount := 0
+	done := make(chan bool, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			testData := map[string]interface{}{
+				"id":    "T-123",
+				"title": "Test Issue",
+			}
+			err := WriteJSONAtomicCreate(indexPath, testData)
+			if err == nil {
+				successCount++
+			} else {
+				errorCount++
+			}
+			done <- true
+		}()
+	}
+
+	// Wait for all goroutines to complete
+	for i := 0; i < numGoroutines; i++ {
+		<-done
+	}
+
+	// Only one should succeed
+	if successCount != 1 {
+		t.Errorf("Expected exactly 1 successful creation, got %d", successCount)
+	}
+	if errorCount != numGoroutines-1 {
+		t.Errorf("Expected %d failures, got %d", numGoroutines-1, errorCount)
+	}
+
+	// Verify file exists and is valid
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		t.Fatal("File was not created")
+	}
+}
+
 // TestWriteJSONAtomic tests atomic JSON write with full protocol
 func TestWriteJSONAtomic(t *testing.T) {
 	tmpDir := t.TempDir()
