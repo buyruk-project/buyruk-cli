@@ -446,6 +446,56 @@ func TestRenderMarkdown(t *testing.T) {
 	}
 }
 
+// TestGetTerminalWidth tests terminal width detection
+func TestGetTerminalWidth(t *testing.T) {
+	// Save original env var
+	originalWidth := os.Getenv("BUYRUK_TERM_WIDTH")
+	defer func() {
+		if originalWidth != "" {
+			os.Setenv("BUYRUK_TERM_WIDTH", originalWidth)
+		} else {
+			os.Unsetenv("BUYRUK_TERM_WIDTH")
+		}
+	}()
+
+	// Test environment variable override
+	os.Setenv("BUYRUK_TERM_WIDTH", "120")
+	width := getTerminalWidth()
+	if width != 120 {
+		t.Errorf("getTerminalWidth() with env var = %d, want 120", width)
+	}
+
+	// Test clamping minimum
+	os.Setenv("BUYRUK_TERM_WIDTH", "20")
+	width = getTerminalWidth()
+	if width != 40 {
+		t.Errorf("getTerminalWidth() with small env var = %d, want 40 (clamped)", width)
+	}
+
+	// Test clamping maximum
+	os.Setenv("BUYRUK_TERM_WIDTH", "300")
+	width = getTerminalWidth()
+	if width != 200 {
+		t.Errorf("getTerminalWidth() with large env var = %d, want 200 (clamped)", width)
+	}
+
+	// Test invalid env var falls back to detection/default
+	os.Setenv("BUYRUK_TERM_WIDTH", "invalid")
+	width = getTerminalWidth()
+	// Should get either detected width or default 80
+	if width < 40 || width > 200 {
+		t.Errorf("getTerminalWidth() with invalid env var = %d, want between 40-200", width)
+	}
+
+	// Test unset env var uses detection/default
+	os.Unsetenv("BUYRUK_TERM_WIDTH")
+	width = getTerminalWidth()
+	// Should get either detected width or default 80
+	if width < 40 || width > 200 {
+		t.Errorf("getTerminalWidth() without env var = %d, want between 40-200", width)
+	}
+}
+
 // TestRenderMarkdownToWriter tests markdown rendering to writer
 func TestRenderMarkdownToWriter(t *testing.T) {
 	text := "# Heading\n\nThis is a paragraph."
