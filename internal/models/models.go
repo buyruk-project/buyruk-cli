@@ -50,7 +50,7 @@ func (i *Issue) Validate() error {
 
 // AddDependency adds a dependency (blocked by) to the issue
 func (i *Issue) AddDependency(issueID string) {
-	if !contains(i.BlockedBy, issueID) {
+	if !ContainsString(i.BlockedBy, issueID) {
 		i.BlockedBy = append(i.BlockedBy, issueID)
 	}
 }
@@ -62,7 +62,7 @@ func (i *Issue) RemoveDependency(issueID string) {
 
 // AddPR adds a PR URL to the issue
 func (i *Issue) AddPR(url string) {
-	if !contains(i.PRs, url) {
+	if !ContainsString(i.PRs, url) {
 		i.PRs = append(i.PRs, url)
 	}
 }
@@ -206,13 +206,7 @@ func isValidProjectKey(key string) bool {
 
 // Helper functions
 
-// contains checks if a string slice contains a specific string
-func contains(slice []string, item string) bool {
-	return ContainsString(slice, item)
-}
-
 // ContainsString checks if a string slice contains a specific string
-// This is exported for use in test files to avoid duplication
 func ContainsString(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {
