@@ -1,0 +1,84 @@
+---
+description: GitHub CLI (gh) commands for PR management and review workflows
+globs: **/*
+---
+
+# GitHub CLI Commands
+
+When working with PRs, reviews, and comments, use the GitHub CLI (`gh`) tool for efficient interaction with GitHub.
+
+## PR Comments and Reviews
+
+### Getting PR Comments
+
+To fetch all top-level PR comments (not replies) for a specific PR:
+
+```bash
+gh api repos/buyruk-project/buyruk-cli/pulls/<PR_NUMBER>/comments --jq '.[] | select(.in_reply_to_id == null) | {path: .path, line: .line, body: .body, user: .user.login}'
+```
+
+**Usage:**
+- Replace `<PR_NUMBER>` with the actual PR number (e.g., `5`)
+- This command filters out reply comments (`in_reply_to_id == null`) to get only top-level comments
+- Returns: file path, line number, comment body, and comment author
+
+**Example:**
+```bash
+gh api repos/buyruk-project/buyruk-cli/pulls/5/comments --jq '.[] | select(.in_reply_to_id == null) | {path: .path, line: .line, body: .body, user: .user.login}'
+```
+
+### Getting PR Reviews
+
+To fetch PR reviews (approvals, request changes, comments):
+
+```bash
+gh pr view <PR_NUMBER> --json reviews --jq '.reviews[] | select(.state != "DISMISSED") | {state: .state, body: .body, author: .author.login}'
+```
+
+### Getting All PR Information
+
+To view comprehensive PR information:
+
+```bash
+gh pr view <PR_NUMBER> --json reviews,comments --jq '.reviews[] | select(.state != "DISMISSED") | {state: .state, body: .body, author: .author.login}'
+```
+
+## Common PR Operations
+
+### View PR Details
+```bash
+gh pr view <PR_NUMBER>
+```
+
+### List PRs
+```bash
+gh pr list
+gh pr list --state open
+gh pr list --state closed
+```
+
+### Check PR Status
+```bash
+gh pr checks <PR_NUMBER>
+```
+
+## Review Workflow
+
+When asked to "check PR comments" or "address PR review comments":
+
+1. **Fetch Comments**: Use the PR comments API command above to get all unresolved comments
+2. **Analyze**: Review each comment for actionable feedback
+3. **Fix**: Address each comment by making code changes
+4. **Test**: Run tests to ensure fixes don't break functionality
+5. **Update rules/AGENTS.md**: Make sure to update correspoding rule file if this is missing in our rules or AGENTS.md
+6. **Commit**: Create atomic commits for each fix or group of related fixes
+7. **Push**: Push changes to the PR branch
+8. **Summary**: Give me a short summary of your fixes
+
+## Best Practices
+
+- Always filter out dismissed/resolved reviews when checking PR status
+- Use `--jq` for structured JSON output when parsing PR data
+- When addressing comments, commit fixes with descriptive messages like `fix(scope): address PR review comment about X`
+- Group related fixes into single commits when appropriate
+- Test all changes before pushing to ensure PR remains green
