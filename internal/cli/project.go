@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,6 +24,7 @@ func NewProjectCmd() *cobra.Command {
 
 	cmd.AddCommand(NewProjectCreateCmd())
 	cmd.AddCommand(NewProjectRepairCmd())
+	cmd.AddCommand(NewProjectDeleteCmd())
 
 	return cmd
 }
@@ -238,6 +240,147 @@ func isValidProjectKey(key string) bool {
 		}
 	}
 	return true
+}
+
+// NewProjectDeleteCmd creates and returns the project delete command.
+func NewProjectDeleteCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "delete <key>",
+		Short: "Delete a project",
+		Long:  "Delete a project and all its data (issues, epics, etc.)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			projectKey := args[0]
+			return deleteProject(projectKey, cmd)
+		},
+	}
+
+	cmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompt and override safety checks (force delete)")
+
+	return cmd
+}
+
+// deleteProject deletes a project and all its data.
+func deleteProject(projectKey string, cmd *cobra.Command) error {
+	// Validate project key format
+	if !isValidProjectKey(projectKey) {
+		return fmt.Errorf("cli: invalid project key %q (must contain only uppercase letters, numbers, and hyphens)", projectKey)
+	}
+
+	// Resolve project directory
+	projectDir, err := storage.ProjectDir(projectKey)
+	if err != nil {
+		return fmt.Errorf("cli: failed to resolve project directory: %w", err)
+	}
+
+	// Check if project exists
+	if _, err := os.Stat(projectDir); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("cli: project %q does not exist", projectKey)
+		}
+		return fmt.Errorf("cli: failed to access project directory %q: %w", projectDir, err)
+	}
+
+	// Check for pending transaction before acquiring lock
+	hasPending, _, err := storage.CheckPendingTransaction(projectKey)
+	if err != nil {
+		return fmt.Errorf("cli: failed to check pending transaction: %w", err)
+	}
+	if hasPending {
+		yes, _ := cmd.Flags().GetBool("yes")
+		if !yes {
+			return fmt.Errorf("cli: project %q has a pending transaction (may indicate a crash). Use -y to force deletion", projectKey)
+		}
+		errOut := cmd.ErrOrStderr()
+		fmt.Fprintf(errOut, "Warning: project %q has a pending transaction. Proceeding with deletion anyway.\n", projectKey)
+	}
+
+	// Acquire project lock to prevent concurrent modifications during deletion
+	// This ensures no other operations are running while we delete
+	cleanup, err := storage.AcquireLock(projectKey)
+	if err != nil {
+		yes, _ := cmd.Flags().GetBool("yes")
+		if !yes {
+			return fmt.Errorf("cli: failed to acquire project lock for %q (another operation may be in progress). Use -y to force deletion: %w", projectKey, err)
+		}
+		errOut := cmd.ErrOrStderr()
+		fmt.Fprintf(errOut, "Warning: failed to acquire lock for project %q. Proceeding with deletion anyway.\n", projectKey)
+	} else {
+		defer cleanup()
+	}
+
+	// Count issues and epics for warning
+	issueCount := 0
+	epicCount := 0
+
+	indexPath, err := storage.ProjectIndexPath(projectKey)
+	if err == nil {
+		var index models.ProjectIndex
+		if err := storage.ReadJSON(indexPath, &index); err == nil {
+			issueCount = len(index.Issues)
+		}
+	}
+
+	epicsDir, err := storage.EpicsDir(projectKey)
+	if err == nil {
+		if entries, err := os.ReadDir(epicsDir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+					epicCount++
+				}
+			}
+		}
+	}
+
+	// Confirmation prompt (unless -y flag is set)
+	yes, _ := cmd.Flags().GetBool("yes")
+	if !yes {
+		errOut := cmd.ErrOrStderr()
+		fmt.Fprintf(errOut, "Warning: This will delete project %q and all its data (%d issues, %d epics).\n", projectKey, issueCount, epicCount)
+		fmt.Fprintf(errOut, "Are you sure you want to delete project %q? (yes/no): ", projectKey)
+
+		scanner := bufio.NewScanner(cmd.InOrStdin())
+		if !scanner.Scan() {
+			return fmt.Errorf("cli: failed to read confirmation: %w", scanner.Err())
+		}
+		response := strings.TrimSpace(strings.ToLower(scanner.Text()))
+		if response != "yes" && response != "y" {
+			return fmt.Errorf("cli: deletion cancelled")
+		}
+	}
+
+	// Begin transaction for project deletion
+	if err := storage.BeginTransaction(projectKey, "delete_project", map[string]interface{}{
+		"project_key": projectKey,
+	}); err != nil {
+		return fmt.Errorf("cli: failed to begin deletion transaction: %w", err)
+	}
+
+	success := false
+	defer func() {
+		if !success {
+			storage.RollbackTransaction(projectKey)
+		}
+	}()
+
+	// Delete project directory (removes all files including issues, epics, index, etc.)
+	// Note: We're deleting the entire directory, so the lock file and transaction log
+	// will also be removed. This is safe because we hold the lock.
+	if err := os.RemoveAll(projectDir); err != nil {
+		return fmt.Errorf("cli: failed to delete project directory: %w", err)
+	}
+
+	// Commit transaction (though the directory is already deleted, this cleans up
+	// any remaining transaction state if the deletion was partial)
+	// Since the directory is gone, this may fail, but that's okay
+	_ = storage.CommitTransaction(projectKey)
+	success = true
+
+	// Success message
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "Deleted project %q\n", projectKey)
+
+	return nil
 }
 
 // ResolveProjectKey resolves the project key from the command.

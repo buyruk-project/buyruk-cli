@@ -2,10 +2,9 @@ package models
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
-
-	"github.com/buyruk-project/buyruk-cli/internal/strutil"
 )
 
 // Issue represents a task or bug issue
@@ -52,26 +51,26 @@ func (i *Issue) Validate() error {
 
 // AddDependency adds a dependency (blocked by) to the issue
 func (i *Issue) AddDependency(issueID string) {
-	if !strutil.Contains(i.BlockedBy, issueID) {
+	if !slices.Contains(i.BlockedBy, issueID) {
 		i.BlockedBy = append(i.BlockedBy, issueID)
 	}
 }
 
 // RemoveDependency removes a dependency from the issue
 func (i *Issue) RemoveDependency(issueID string) {
-	i.BlockedBy = strutil.Remove(i.BlockedBy, issueID)
+	i.BlockedBy = slices.DeleteFunc(i.BlockedBy, func(s string) bool { return s == issueID })
 }
 
 // AddPR adds a PR URL to the issue
 func (i *Issue) AddPR(url string) {
-	if !strutil.Contains(i.PRs, url) {
+	if !slices.Contains(i.PRs, url) {
 		i.PRs = append(i.PRs, url)
 	}
 }
 
 // RemovePR removes a PR URL from the issue
 func (i *Issue) RemovePR(url string) {
-	i.PRs = strutil.Remove(i.PRs, url)
+	i.PRs = slices.DeleteFunc(i.PRs, func(s string) bool { return s == url })
 }
 
 // Epic represents an epic that groups multiple issues

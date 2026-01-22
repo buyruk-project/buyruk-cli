@@ -1,8 +1,7 @@
 ---
 description: Rules for filesystem persistence and atomic data writes
-globs: **/*.go
+alwaysApply: false
 ---
-
 # Persistence & Safety Rules
 
 When modifying any JSON files in `[ConfigDir]` or `projects/`, you MUST adhere to the buyruk atomic protocol.

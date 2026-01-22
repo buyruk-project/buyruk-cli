@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -302,7 +303,7 @@ func TestSet_InvalidProjectKey(t *testing.T) {
 	if err == nil {
 		t.Fatal("Set() should fail for invalid project key")
 	}
-	if err.Error() != "config: invalid project key \"invalid-project\" (must be uppercase alphanumeric)" {
+	if !strings.Contains(err.Error(), "invalid project key") {
 		t.Errorf("Set() error = %q, want error about invalid project key", err.Error())
 	}
 }
@@ -387,7 +388,7 @@ func TestIsValidProjectKey(t *testing.T) {
 		{"lowercase", "test", false},
 		{"mixed case", "Test", false},
 		{"with underscore", "TEST_123", false},
-		{"with dash", "TEST-123", false},
+		{"with dash", "TEST-123", true},
 		{"with space", "TEST 123", false},
 		{"empty", "", false},
 	}
@@ -415,7 +416,8 @@ func TestValidate(t *testing.T) {
 		{"invalid format", &Config{DefaultFormat: "invalid"}, true},
 		{"invalid project lowercase", &Config{DefaultProject: "test"}, true},
 		{"invalid project mixed case", &Config{DefaultProject: "Test"}, true},
-		{"invalid project with special chars", &Config{DefaultProject: "TEST-123"}, true},
+		{"invalid project with special chars", &Config{DefaultProject: "TEST@123"}, true},
+		{"valid project with hyphen", &Config{DefaultProject: "TEST-123"}, false},
 	}
 
 	for _, tt := range tests {

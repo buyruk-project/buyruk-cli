@@ -261,3 +261,58 @@ func UpdateJSONAtomic(path string, v interface{}, updateFunc UpdateFunc) error {
 	success = true
 	return nil
 }
+
+// DeleteAtomic deletes a file atomically using the lock and transaction protocol.
+// This function handles the full atomic protocol: lock, transaction, delete, commit.
+// It extracts the project key from the file path.
+func DeleteAtomic(path string) error {
+	// Extract project key from path
+	projectKey, err := extractProjectKeyFromPath(path)
+	if err != nil {
+		return fmt.Errorf("storage: failed to extract project key from path: %w", err)
+	}
+
+	// Step 1: Acquire lock
+	cleanup, err := AcquireLock(projectKey)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Step 2: Begin transaction
+	if err := BeginTransaction(projectKey, "delete_file", map[string]interface{}{
+		"file": path,
+	}); err != nil {
+		return err
+	}
+
+	// Track success to conditionally rollback only on failure
+	success := false
+	defer func() {
+		if !success {
+			RollbackTransaction(projectKey)
+		}
+	}()
+
+	// Step 3: Check if file exists
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("storage: file does not exist: %s", path)
+		}
+		return fmt.Errorf("storage: failed to check file existence: %w", err)
+	}
+
+	// Step 4: Delete file
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("storage: failed to delete file: %w", err)
+	}
+
+	// Step 5: Commit transaction
+	if err := CommitTransaction(projectKey); err != nil {
+		return err
+	}
+
+	// Mark as successful so rollback won't execute
+	success = true
+	return nil
+}

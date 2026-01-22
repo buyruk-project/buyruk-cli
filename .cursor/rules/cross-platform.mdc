@@ -1,8 +1,7 @@
 ---
 description: Rules for ensuring Windows, macOS, and Linux compatibility
-globs: **/*.go
+alwaysApply: false
 ---
-
 # Cross-Platform Compatibility Rules
 
 ## 1. Filesystem Paths

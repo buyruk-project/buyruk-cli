@@ -1,8 +1,7 @@
 ---
 description: Rules for implementing the L-SON (LLM-Simplified Object Notation) output
-globs: **/*.go
+alwaysApply: false
 ---
-
 # L-SON Implementation Standards
 
 L-SON is a token-efficient format used when users pass the `--format lson` flag.

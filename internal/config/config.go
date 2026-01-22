@@ -99,7 +99,7 @@ func Set(key, value string) error {
 	switch key {
 	case "default_project":
 		if value != "" && !isValidProjectKey(value) {
-			return fmt.Errorf("config: invalid project key %q (must be uppercase alphanumeric)", value)
+			return fmt.Errorf("config: invalid project key %q (must be uppercase alphanumeric or hyphen)", value)
 		}
 		cfg.DefaultProject = value
 	case "default_format":
@@ -138,8 +138,8 @@ func isValidFormat(format string) bool {
 		format == DefaultFormatLSON
 }
 
-// isValidProjectKey validates that the project key is uppercase alphanumeric.
-var projectKeyRegex = regexp.MustCompile(`^[A-Z0-9]+$`)
+// isValidProjectKey validates that the project key is uppercase alphanumeric or hyphen.
+var projectKeyRegex = regexp.MustCompile(`^[A-Z0-9-]+$`)
 
 func isValidProjectKey(key string) bool {
 	return projectKeyRegex.MatchString(key)
@@ -151,10 +151,10 @@ func Validate(cfg *Config) error {
 		return fmt.Errorf("config: invalid default_format %q", cfg.DefaultFormat)
 	}
 
-	// Project key validation (uppercase alphanumeric)
+	// Project key validation (uppercase alphanumeric or hyphen)
 	if cfg.DefaultProject != "" {
 		if !isValidProjectKey(cfg.DefaultProject) {
-			return fmt.Errorf("config: invalid project key %q (must be uppercase alphanumeric)", cfg.DefaultProject)
+			return fmt.Errorf("config: invalid project key %q (must be uppercase alphanumeric or hyphen)", cfg.DefaultProject)
 		}
 	}
 

@@ -22,6 +22,7 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(NewViewCmd())
 	rootCmd.AddCommand(NewProjectCmd())
 	rootCmd.AddCommand(NewIssueCmd())
+	rootCmd.AddCommand(NewEpicCmd())
 	rootCmd.AddCommand(NewConfigCmd())
 	rootCmd.AddCommand(NewExportCmd())
 	rootCmd.AddCommand(NewImportCmd())

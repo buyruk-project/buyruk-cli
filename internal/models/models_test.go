@@ -2,10 +2,10 @@ package models
 
 import (
 	"encoding/json"
+	"slices"
+	"strings"
 	"testing"
 	"time"
-
-	"github.com/buyruk-project/buyruk-cli/internal/strutil"
 )
 
 // Test Constants
@@ -230,7 +230,7 @@ func TestIssue_RemoveDependency(t *testing.T) {
 	if len(issue.BlockedBy) != 2 {
 		t.Errorf("RemoveDependency() should remove one dependency, got %d", len(issue.BlockedBy))
 	}
-	if strutil.Contains(issue.BlockedBy, "CORE-11") {
+	if slices.Contains(issue.BlockedBy, "CORE-11") {
 		t.Error("RemoveDependency() should remove CORE-11")
 	}
 
@@ -772,19 +772,19 @@ func TestIssue_JSON_EmptyFields(t *testing.T) {
 
 	// Verify omitempty works - should not include empty optional fields
 	dataStr := string(data)
-	if strutil.Contains([]string{dataStr}, `"priority"`) {
+	if strings.Contains(dataStr, `"priority"`) {
 		t.Error("JSON should not include empty priority field")
 	}
-	if strutil.Contains([]string{dataStr}, `"description"`) {
+	if strings.Contains(dataStr, `"description"`) {
 		t.Error("JSON should not include empty description field")
 	}
-	if strutil.Contains([]string{dataStr}, `"prs"`) {
+	if strings.Contains(dataStr, `"prs"`) {
 		t.Error("JSON should not include empty prs field")
 	}
-	if strutil.Contains([]string{dataStr}, `"blocked_by"`) {
+	if strings.Contains(dataStr, `"blocked_by"`) {
 		t.Error("JSON should not include empty blocked_by field")
 	}
-	if strutil.Contains([]string{dataStr}, `"epic_id"`) {
+	if strings.Contains(dataStr, `"epic_id"`) {
 		t.Error("JSON should not include empty epic_id field")
 	}
 }

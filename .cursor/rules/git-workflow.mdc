@@ -1,8 +1,7 @@
 ---
 description: Automated Git & GitHub CLI workflow for atomic commits and draft PRs
-globs: **/*
+alwaysApply: false
 ---
-
 # Git & GitHub Workflow (Atomic & Professional)
 
 When I ask you to "ship this" or "prepare a PR," follow these exact steps using the terminal. If i didn't specify the base branch is always origin/main and you should create branch from origin/main.
