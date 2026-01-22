@@ -452,8 +452,11 @@ func deleteEpic(epicID string, cmd *cobra.Command) error {
 		return fmt.Errorf("cli: failed to resolve epic path: %w", err)
 	}
 
-	if _, err := os.Stat(epicPath); os.IsNotExist(err) {
-		return fmt.Errorf("cli: epic %q not found", epicID)
+	if _, err := os.Stat(epicPath); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("cli: epic %q not found", epicID)
+		}
+		return fmt.Errorf("cli: failed to stat epic: %w", err)
 	}
 
 	// Check for issues that reference this epic

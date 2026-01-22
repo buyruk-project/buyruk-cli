@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -122,8 +123,11 @@ func createIssue(cmd *cobra.Command) error {
 		if err != nil {
 			return fmt.Errorf("cli: failed to resolve epic path: %w", err)
 		}
-		if _, err := os.Stat(epicPath); os.IsNotExist(err) {
-			return fmt.Errorf("cli: epic %q not found", epicID)
+		if _, err := os.Stat(epicPath); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("cli: epic %q not found", epicID)
+			}
+			return fmt.Errorf("cli: failed to stat epic path %q: %w", epicPath, err)
 		}
 	}
 
@@ -539,8 +543,11 @@ func deleteIssue(issueID string, cmd *cobra.Command) error {
 		return fmt.Errorf("cli: failed to resolve issue path: %w", err)
 	}
 
-	if _, err := os.Stat(issuePath); os.IsNotExist(err) {
-		return fmt.Errorf("cli: issue %q not found", issueID)
+	if _, err := os.Stat(issuePath); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("cli: issue %q not found", issueID)
+		}
+		return fmt.Errorf("cli: failed to stat issue path %q: %w", issuePath, err)
 	}
 
 	// Check for issues that depend on this issue
@@ -592,22 +599,64 @@ func deleteIssue(issueID string, cmd *cobra.Command) error {
 		}
 	}
 
-	// Delete issue file atomically (with lock and transaction)
-	if err := storage.DeleteAtomic(issuePath); err != nil {
+	// Delete issue file and update index atomically under one lock/transaction
+	// This prevents race conditions where the file is deleted but index update fails
+	cleanup, err := storage.AcquireLock(projectKey)
+	if err != nil {
+		return fmt.Errorf("cli: failed to acquire lock: %w", err)
+	}
+	defer cleanup()
+
+	// Begin transaction
+	if err := storage.BeginTransaction(projectKey, "delete_issue", map[string]interface{}{
+		"issue_id": issueID,
+		"file":     issuePath,
+	}); err != nil {
+		return fmt.Errorf("cli: failed to begin transaction: %w", err)
+	}
+
+	success := false
+	defer func() {
+		if !success {
+			storage.RollbackTransaction(projectKey)
+		}
+	}()
+
+	// Delete issue file
+	if err := os.Remove(issuePath); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("cli: issue %q not found", issueID)
+		}
 		return fmt.Errorf("cli: failed to delete issue file: %w", err)
 	}
 
-	// Update project index atomically (remove issue from index)
-	if err := storage.UpdateJSONAtomic(indexPath, &index, func(v interface{}) error {
-		idx := v.(*models.ProjectIndex)
-		idx.RemoveIssue(issueID)
-		idx.UpdatedAt = time.Now().Format(time.RFC3339)
-		return nil
-	}); err != nil {
-		// Log warning but don't fail - issue file is already deleted
-		errOut := cmd.ErrOrStderr()
-		fmt.Fprintf(errOut, "Warning: failed to update project index: %v\n", err)
+	// Update project index (remove issue from index)
+	if err := storage.ReadJSON(indexPath, &index); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("cli: failed to read project index: %w", err)
 	}
+	// Initialize index if it doesn't exist
+	if index.ProjectKey == "" {
+		index.ProjectKey = projectKey
+		index.Issues = []models.IndexEntry{}
+	}
+	index.RemoveIssue(issueID)
+	index.UpdatedAt = time.Now().Format(time.RFC3339)
+
+	// Write updated index
+	data, err := json.MarshalIndent(&index, "", "  ")
+	if err != nil {
+		return fmt.Errorf("cli: failed to marshal index: %w", err)
+	}
+	if err := storage.WriteAtomic(indexPath, data); err != nil {
+		return fmt.Errorf("cli: failed to write index: %w", err)
+	}
+
+	// Commit transaction
+	if err := storage.CommitTransaction(projectKey); err != nil {
+		return fmt.Errorf("cli: failed to commit transaction: %w", err)
+	}
+
+	success = true
 
 	// Success message
 	out := cmd.OutOrStdout()
