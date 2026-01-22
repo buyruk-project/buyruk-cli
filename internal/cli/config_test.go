@@ -9,7 +9,6 @@ import (
 
 	"github.com/buyruk-project/buyruk-cli/internal/config"
 	"github.com/buyruk-project/buyruk-cli/internal/storage"
-	"github.com/buyruk-project/buyruk-cli/internal/strutil"
 )
 
 func TestNewConfigCmd(t *testing.T) {
@@ -476,29 +475,5 @@ func TestConfigList_LSONFormat(t *testing.T) {
 	}
 	if !strings.Contains(output, "@DEFAULT_PROJECT:") {
 		t.Errorf("Expected output to contain '@DEFAULT_PROJECT:', got: %s", output)
-	}
-}
-
-func TestContains(t *testing.T) {
-	tests := []struct {
-		name  string
-		slice []string
-		item  string
-		want  bool
-	}{
-		{"contains item", []string{"a", "b", "c"}, "b", true},
-		{"does not contain item", []string{"a", "b", "c"}, "d", false},
-		{"empty slice", []string{}, "a", false},
-		{"single item match", []string{"a"}, "a", true},
-		{"single item no match", []string{"a"}, "b", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := strutil.Contains(tt.slice, tt.item)
-			if got != tt.want {
-				t.Errorf("strutil.Contains(%v, %q) = %v, want %v", tt.slice, tt.item, got, tt.want)
-			}
-		})
 	}
 }

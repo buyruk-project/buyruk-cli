@@ -4,19 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/buyruk-project/buyruk-cli/internal/config"
 	"github.com/buyruk-project/buyruk-cli/internal/storage"
-	"github.com/buyruk-project/buyruk-cli/internal/strutil"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )
-
-// configProjectKeyRegex matches the config package's validation rules
-// (uppercase alphanumeric only, no hyphens)
-var configProjectKeyRegex = regexp.MustCompile(`^[A-Z0-9]+$`)
 
 // NewConfigCmd creates and returns the config command.
 func NewConfigCmd() *cobra.Command {
@@ -115,27 +109,13 @@ func getConfig(key string, cmd *cobra.Command) error {
 
 // setConfig sets a configuration value.
 func setConfig(key, value string, cmd *cobra.Command) error {
-	// Validate key
-	validKeys := []string{"default_project", "default_format"}
-	if !strutil.Contains(validKeys, key) {
-		return fmt.Errorf("cli: unknown config key %q (valid keys: %s)", key, strings.Join(validKeys, ", "))
+	// Set config value (config.Set() handles all validation)
+	if err := config.Set(key, value); err != nil {
+		return fmt.Errorf("cli: failed to set config: %w", err)
 	}
 
-	// Validate value based on key
-	if key == "default_format" {
-		validFormats := []string{"modern", "json", "lson"}
-		if !strutil.Contains(validFormats, value) {
-			return fmt.Errorf("cli: invalid format %q (must be one of: %s)", value, strings.Join(validFormats, ", "))
-		}
-	}
-
-	if key == "default_project" {
-		// Validate project key format (config package rules: uppercase alphanumeric only)
-		if !configProjectKeyRegex.MatchString(value) {
-			return fmt.Errorf("cli: invalid project key %q (must be uppercase alphanumeric)", value)
-		}
-
-		// Optionally validate that project exists
+	// CLI-specific: warn if setting default_project to non-existent project
+	if key == "default_project" && value != "" {
 		projectDir, err := storage.ProjectDir(value)
 		if err == nil {
 			if _, err := os.Stat(projectDir); os.IsNotExist(err) {
@@ -143,11 +123,6 @@ func setConfig(key, value string, cmd *cobra.Command) error {
 				fmt.Fprintf(errOut, "Warning: project %q does not exist\n", value)
 			}
 		}
-	}
-
-	// Set config value
-	if err := config.Set(key, value); err != nil {
-		return fmt.Errorf("cli: failed to set config: %w", err)
 	}
 
 	// Success message

@@ -12,7 +12,7 @@ func Contains(slice []string, item string) bool {
 
 // Remove removes all occurrences of a string from a string slice.
 func Remove(slice []string, item string) []string {
-	result := []string{}
+	result := make([]string, 0, len(slice))
 	for _, s := range slice {
 		if s != item {
 			result = append(result, s)
