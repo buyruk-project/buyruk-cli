@@ -12,6 +12,9 @@ Buyruk is a high-performance, local-first orchestration tool. It treats the file
 - **Data**: Local JSON with metadata indexing.
 
 ## 💾 Storage & Concurrency (CRITICAL)
+**ALL file operations MUST be atomic and race-condition-free.** This is non-negotiable.
+
+### Atomic Write Operations
 Every file write MUST follow the atomic safety protocol to prevent corruption:
 1. **Check Lock**: Check for `.buyruk.lock`. If present, retry for 5s then fail.
 2. **Transaction Log**: Record intent in `.buyruk_pending` before any modification.
@@ -20,6 +23,74 @@ Every file write MUST follow the atomic safety protocol to prevent corruption:
    - Use `os.Rename` to overwrite `filename.json` (Atomic on Unix/Windows).
 4. **Pathing**: NEVER use `/`. Always use `filepath.Join()` to maintain Windows compatibility.
 5. **Config Dir**: Use `os.UserConfigDir()` to locate the base `buyruk/` folder.
+
+### Available Atomic Functions (USE THESE)
+The storage package provides atomic functions that handle locking and transactions automatically:
+
+- **`WriteJSONAtomic(path, value)`**: Atomic write (overwrites if exists)
+  - Use for: Simple writes where overwriting is acceptable
+  - Handles: Lock acquisition, transaction, write, commit
+
+- **`WriteJSONAtomicCreate(path, value)`**: Atomic create (fails if exists)
+  - Use for: Creating new files (projects, issues, epics)
+  - Handles: Lock acquisition, existence check (inside lock), write, commit
+  - Returns error if file already exists
+
+- **`UpdateJSONAtomic(path, value, updateFunc)`**: Atomic read-modify-write
+  - Use for: Updating existing files (project index, issue updates)
+  - Handles: Lock acquisition, read, modify, write, commit
+  - Prevents race conditions in read-modify-write operations
+
+### Race Condition Prevention Rules
+1. **NEVER check file existence outside a lock** - Use `WriteJSONAtomicCreate` instead
+2. **NEVER do read-modify-write without locking** - Use `UpdateJSONAtomic` instead
+3. **NEVER use `os.Stat()` + `WriteJSONAtomic()` pattern** - This creates race conditions
+4. **Read-only operations** (like `list`) don't need locking - multiple readers are safe
+
+### Examples
+
+**❌ WRONG - Race Condition:**
+```go
+// Check exists (no lock)
+if _, err := os.Stat(path); err == nil {
+    return fmt.Errorf("already exists")
+}
+// Write (with lock, but check was outside lock!)
+storage.WriteJSONAtomic(path, data)
+```
+
+**✅ CORRECT - Atomic Create:**
+```go
+// Atomic check + create (all inside lock)
+if err := storage.WriteJSONAtomicCreate(path, data); err != nil {
+    if strings.Contains(err.Error(), "already exists") {
+        return fmt.Errorf("already exists")
+    }
+    return err
+}
+```
+
+**❌ WRONG - Race Condition:**
+```go
+// Read (no lock)
+var index models.ProjectIndex
+storage.ReadJSON(path, &index)
+// Modify
+index.AddIssue(issue)
+// Write (with lock, but read was outside lock!)
+storage.WriteJSONAtomic(path, &index)
+```
+
+**✅ CORRECT - Atomic Update:**
+```go
+// Atomic read-modify-write (all inside lock)
+var index models.ProjectIndex
+storage.UpdateJSONAtomic(path, &index, func(v interface{}) error {
+    idx := v.(*models.ProjectIndex)
+    idx.AddIssue(issue)
+    return nil
+})
+```
 
 ## 🤖 AI-Native Logic (L-SON)
 L-SON is our token-optimized format for LLM context.

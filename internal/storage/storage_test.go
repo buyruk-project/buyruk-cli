@@ -3,10 +3,12 @@ package storage
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -527,6 +529,310 @@ func TestWriteAtomic(t *testing.T) {
 	tmpFile := testFile + ".tmp"
 	if _, err := os.Stat(tmpFile); !os.IsNotExist(err) {
 		t.Fatal("Temp file was not cleaned up")
+	}
+}
+
+// TestUpdateJSONAtomic tests atomic read-modify-write operation
+func TestUpdateJSONAtomic(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalUserConfigDir := userConfigDirFunc
+	originalCachedDir := cachedConfigDir
+	defer func() {
+		userConfigDirFunc = originalUserConfigDir
+		cachedConfigDir = originalCachedDir
+	}()
+
+	resetConfigDirCache()
+	userConfigDirFunc = func() (string, error) {
+		return tmpDir, nil
+	}
+
+	projectKey := "TEST-PROJ"
+	projectDir, _ := ProjectDir(projectKey)
+	os.MkdirAll(projectDir, 0755)
+
+	indexPath, _ := ProjectIndexPath(projectKey)
+
+	// Test updating non-existent file (should create it)
+	type TestData struct {
+		Value int `json:"value"`
+	}
+
+	var data TestData
+	err := UpdateJSONAtomic(indexPath, &data, func(v interface{}) error {
+		d := v.(*TestData)
+		d.Value = 42
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("UpdateJSONAtomic() failed: %v", err)
+	}
+
+	// Verify file was created and written
+	var readData TestData
+	if err := ReadJSON(indexPath, &readData); err != nil {
+		t.Fatalf("Failed to read updated file: %v", err)
+	}
+
+	if readData.Value != 42 {
+		t.Errorf("UpdateJSONAtomic() value = %d, want 42", readData.Value)
+	}
+
+	// Test updating existing file
+	err = UpdateJSONAtomic(indexPath, &readData, func(v interface{}) error {
+		d := v.(*TestData)
+		d.Value = 100
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("UpdateJSONAtomic() failed on second update: %v", err)
+	}
+
+	// Verify update
+	var readData2 TestData
+	if err := ReadJSON(indexPath, &readData2); err != nil {
+		t.Fatalf("Failed to read updated file: %v", err)
+	}
+
+	if readData2.Value != 100 {
+		t.Errorf("UpdateJSONAtomic() value after second update = %d, want 100", readData2.Value)
+	}
+}
+
+// TestUpdateJSONAtomic_ErrorHandling tests error handling in update function
+func TestUpdateJSONAtomic_ErrorHandling(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalUserConfigDir := userConfigDirFunc
+	originalCachedDir := cachedConfigDir
+	defer func() {
+		userConfigDirFunc = originalUserConfigDir
+		cachedConfigDir = originalCachedDir
+	}()
+
+	resetConfigDirCache()
+	userConfigDirFunc = func() (string, error) {
+		return tmpDir, nil
+	}
+
+	projectKey := "TEST-PROJ"
+	projectDir, _ := ProjectDir(projectKey)
+	os.MkdirAll(projectDir, 0755)
+
+	indexPath, _ := ProjectIndexPath(projectKey)
+
+	// Create initial file
+	type TestData struct {
+		Value int `json:"value"`
+	}
+	initialData := TestData{Value: 10}
+	if err := WriteJSONAtomic(indexPath, &initialData); err != nil {
+		t.Fatalf("Failed to create initial file: %v", err)
+	}
+
+	// Test that error in update function aborts the update
+	var data TestData
+	err := UpdateJSONAtomic(indexPath, &data, func(v interface{}) error {
+		return fmt.Errorf("update function error")
+	})
+
+	if err == nil {
+		t.Fatal("UpdateJSONAtomic() should fail when update function returns error")
+	}
+
+	// Verify file was not modified
+	var readData TestData
+	if err := ReadJSON(indexPath, &readData); err != nil {
+		t.Fatalf("Failed to read file: %v", err)
+	}
+
+	if readData.Value != 10 {
+		t.Errorf("UpdateJSONAtomic() should not modify file on error, value = %d, want 10", readData.Value)
+	}
+}
+
+// TestUpdateJSONAtomic_Concurrent tests that concurrent updates are serialized
+func TestUpdateJSONAtomic_Concurrent(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalUserConfigDir := userConfigDirFunc
+	originalCachedDir := cachedConfigDir
+	defer func() {
+		userConfigDirFunc = originalUserConfigDir
+		cachedConfigDir = originalCachedDir
+	}()
+
+	resetConfigDirCache()
+	userConfigDirFunc = func() (string, error) {
+		return tmpDir, nil
+	}
+
+	projectKey := "TEST-PROJ"
+	projectDir, _ := ProjectDir(projectKey)
+	os.MkdirAll(projectDir, 0755)
+
+	indexPath, _ := ProjectIndexPath(projectKey)
+
+	// Create initial file
+	type Counter struct {
+		Count int `json:"count"`
+	}
+	initialData := Counter{Count: 0}
+	if err := WriteJSONAtomic(indexPath, &initialData); err != nil {
+		t.Fatalf("Failed to create initial file: %v", err)
+	}
+
+	// Run concurrent updates
+	numGoroutines := 10
+	updatesPerGoroutine := 10
+	done := make(chan error, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			var err error
+			for j := 0; j < updatesPerGoroutine; j++ {
+				var data Counter
+				err = UpdateJSONAtomic(indexPath, &data, func(v interface{}) error {
+					c := v.(*Counter)
+					c.Count++
+					return nil
+				})
+				if err != nil {
+					break
+				}
+			}
+			done <- err
+		}()
+	}
+
+	// Wait for all goroutines to complete
+	for i := 0; i < numGoroutines; i++ {
+		if err := <-done; err != nil {
+			t.Fatalf("Concurrent update failed: %v", err)
+		}
+	}
+
+	// Verify final count
+	var finalData Counter
+	if err := ReadJSON(indexPath, &finalData); err != nil {
+		t.Fatalf("Failed to read final file: %v", err)
+	}
+
+	expectedCount := numGoroutines * updatesPerGoroutine
+	if finalData.Count != expectedCount {
+		t.Errorf("Concurrent updates: final count = %d, want %d", finalData.Count, expectedCount)
+	}
+}
+
+// TestWriteJSONAtomicCreate tests atomic JSON create (fails if exists)
+func TestWriteJSONAtomicCreate(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalUserConfigDir := userConfigDirFunc
+	originalCachedDir := cachedConfigDir
+	defer func() {
+		userConfigDirFunc = originalUserConfigDir
+		cachedConfigDir = originalCachedDir
+	}()
+
+	resetConfigDirCache()
+	userConfigDirFunc = func() (string, error) {
+		return tmpDir, nil
+	}
+
+	projectKey := "TEST-PROJ"
+	projectDir, _ := ProjectDir(projectKey)
+	os.MkdirAll(projectDir, 0755)
+
+	indexPath, _ := ProjectIndexPath(projectKey)
+
+	// Test creating new file
+	testData := map[string]interface{}{
+		"id":    "T-123",
+		"title": "Test Issue",
+	}
+
+	err := WriteJSONAtomicCreate(indexPath, testData)
+	if err != nil {
+		t.Fatalf("WriteJSONAtomicCreate() failed: %v", err)
+	}
+
+	// Verify file was created
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		t.Fatal("File was not created")
+	}
+
+	// Test that creating again fails
+	err = WriteJSONAtomicCreate(indexPath, testData)
+	if err == nil {
+		t.Fatal("WriteJSONAtomicCreate() should fail when file already exists")
+	}
+
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("WriteJSONAtomicCreate() error = %q, want error about file already existing", err.Error())
+	}
+}
+
+// TestWriteJSONAtomicCreate_Concurrent tests concurrent creation attempts
+func TestWriteJSONAtomicCreate_Concurrent(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalUserConfigDir := userConfigDirFunc
+	originalCachedDir := cachedConfigDir
+	defer func() {
+		userConfigDirFunc = originalUserConfigDir
+		cachedConfigDir = originalCachedDir
+	}()
+
+	resetConfigDirCache()
+	userConfigDirFunc = func() (string, error) {
+		return tmpDir, nil
+	}
+
+	projectKey := "TEST-PROJ"
+	projectDir, _ := ProjectDir(projectKey)
+	os.MkdirAll(projectDir, 0755)
+
+	indexPath, _ := ProjectIndexPath(projectKey)
+
+	// Try to create the same file concurrently
+	numGoroutines := 10
+	var successCount int64
+	var errorCount int64
+	done := make(chan bool, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			testData := map[string]interface{}{
+				"id":    "T-123",
+				"title": "Test Issue",
+			}
+			err := WriteJSONAtomicCreate(indexPath, testData)
+			if err == nil {
+				atomic.AddInt64(&successCount, 1)
+			} else {
+				atomic.AddInt64(&errorCount, 1)
+			}
+			done <- true
+		}()
+	}
+
+	// Wait for all goroutines to complete
+	for i := 0; i < numGoroutines; i++ {
+		<-done
+	}
+
+	// Only one should succeed
+	finalSuccessCount := atomic.LoadInt64(&successCount)
+	finalErrorCount := atomic.LoadInt64(&errorCount)
+	if finalSuccessCount != 1 {
+		t.Errorf("Expected exactly 1 successful creation, got %d", finalSuccessCount)
+	}
+	if finalErrorCount != int64(numGoroutines-1) {
+		t.Errorf("Expected %d failures, got %d", numGoroutines-1, finalErrorCount)
+	}
+
+	// Verify file exists and is valid
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		t.Fatal("File was not created")
 	}
 }
 

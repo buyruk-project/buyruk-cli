@@ -114,13 +114,13 @@ func TestIssue_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "missing ID",
+			name: "missing ID (now optional)",
 			issue: &Issue{
 				Type:   TypeTask,
 				Title:  "Test Issue",
 				Status: StatusTODO,
 			},
-			wantErr: true,
+			wantErr: false, // ID is now optional
 		},
 		{
 			name: "missing title",
@@ -163,14 +163,14 @@ func TestIssue_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "empty type is invalid",
+			name: "empty type (now optional)",
 			issue: &Issue{
 				ID:     "CORE-12",
 				Type:   "",
 				Title:  "Test Issue",
 				Status: StatusTODO,
 			},
-			wantErr: true,
+			wantErr: false, // Type is now optional
 		},
 	}
 
