@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -771,19 +772,19 @@ func TestIssue_JSON_EmptyFields(t *testing.T) {
 
 	// Verify omitempty works - should not include empty optional fields
 	dataStr := string(data)
-	if slices.Contains([]string{dataStr}, `"priority"`) {
+	if strings.Contains(dataStr, `"priority"`) {
 		t.Error("JSON should not include empty priority field")
 	}
-	if slices.Contains([]string{dataStr}, `"description"`) {
+	if strings.Contains(dataStr, `"description"`) {
 		t.Error("JSON should not include empty description field")
 	}
-	if slices.Contains([]string{dataStr}, `"prs"`) {
+	if strings.Contains(dataStr, `"prs"`) {
 		t.Error("JSON should not include empty prs field")
 	}
-	if slices.Contains([]string{dataStr}, `"blocked_by"`) {
+	if strings.Contains(dataStr, `"blocked_by"`) {
 		t.Error("JSON should not include empty blocked_by field")
 	}
-	if slices.Contains([]string{dataStr}, `"epic_id"`) {
+	if strings.Contains(dataStr, `"epic_id"`) {
 		t.Error("JSON should not include empty epic_id field")
 	}
 }
