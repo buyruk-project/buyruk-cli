@@ -113,3 +113,90 @@ func extractProjectKeyFromPath(path string) (string, error) {
 
 	return parts[projectsIndex+1], nil
 }
+
+// UpdateFunc is a function type that modifies a JSON-serializable value in place.
+// It receives a pointer to the current value and modifies it directly.
+// If the file doesn't exist, v will be a zero value of its type.
+// If the function returns an error, the update is aborted and the transaction is rolled back.
+type UpdateFunc func(v interface{}) error
+
+// UpdateJSONAtomic performs an atomic read-modify-write operation on a JSON file.
+// This function handles the full atomic protocol: lock, transaction, read, modify, write, commit.
+// It extracts the project key from the file path.
+//
+// The v parameter should be a pointer to the type you want to read/write.
+// The updateFunc receives the same pointer and can modify it in place.
+// If the file doesn't exist, v will contain the zero value of its type.
+//
+// Example usage:
+//
+//	var index models.ProjectIndex
+//	err := UpdateJSONAtomic(indexPath, &index, func(v interface{}) error {
+//	    idx := v.(*models.ProjectIndex)
+//	    idx.AddIssue(issue)
+//	    idx.UpdatedAt = time.Now().Format(time.RFC3339)
+//	    return nil
+//	})
+func UpdateJSONAtomic(path string, v interface{}, updateFunc UpdateFunc) error {
+	// Extract project key from path
+	projectKey, err := extractProjectKeyFromPath(path)
+	if err != nil {
+		return fmt.Errorf("storage: failed to extract project key from path: %w", err)
+	}
+
+	// Step 1: Acquire lock
+	cleanup, err := AcquireLock(projectKey)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Step 2: Begin transaction
+	if err := BeginTransaction(projectKey, "update_json", map[string]interface{}{
+		"file": path,
+	}); err != nil {
+		return err
+	}
+
+	// Track success to conditionally rollback only on failure
+	success := false
+	defer func() {
+		if !success {
+			RollbackTransaction(projectKey)
+		}
+	}()
+
+	// Step 3: Read current value (if file exists)
+	if _, err := os.Stat(path); err == nil {
+		// File exists, read it
+		if err := ReadJSON(path, v); err != nil {
+			return fmt.Errorf("storage: failed to read current value: %w", err)
+		}
+	}
+	// If file doesn't exist, v remains as zero value (which is fine)
+
+	// Step 4: Call update function to modify the value
+	if err := updateFunc(v); err != nil {
+		return fmt.Errorf("storage: update function failed: %w", err)
+	}
+
+	// Step 5: Marshal updated value
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Errorf("storage: failed to marshal updated value: %w", err)
+	}
+
+	// Step 6: Write atomically
+	if err := WriteAtomic(path, data); err != nil {
+		return err
+	}
+
+	// Step 7: Commit transaction
+	if err := CommitTransaction(projectKey); err != nil {
+		return err
+	}
+
+	// Mark as successful so rollback won't execute
+	success = true
+	return nil
+}
